@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 
 function Clients({ user, kesyeOnly }) {
-  const [clients, setClients] = useState([
-    { id: 1, numKont: 'GKP-0001', nom: 'Jean', prenon: 'Baptiste', phone: '509-1234-5678', email: 'jean@email.com', balance: 15000, branch: 'Branch Potoprens', date: '2026-01-15', adres: 'Delmas 33', nif: '001-234-5678', dateNesans: '1985-03-15', deviz: 'HTG', seks: 'Gason', depoInisyal: 5000, fre: 500, pin: '1234', kontJoint: null, status: 'Aktif' },
-    { id: 2, numKont: 'GKP-0002', nom: 'Marie', prenon: 'Pierre', phone: '509-9876-5432', email: 'marie@email.com', balance: 8500, branch: 'Branch Kapo', date: '2026-02-20', adres: 'Kapo Vil', nif: '002-345-6789', dateNesans: '1990-07-22', deviz: 'HTG', seks: 'Fanm', depoInisyal: 3000, fre: 500, pin: '5678', kontJoint: null, status: 'Aktif' },
-    { id: 3, numKont: 'GKP-0003', nom: 'Paul', prenon: 'Joseph', phone: '509-5555-4444', email: '', balance: 32000, branch: 'Branch Potoprens', date: '2026-03-10', adres: 'Potoprens', nif: '003-456-7890', dateNesans: '1978-11-05', deviz: 'USD', seks: 'Gason', depoInisyal: 10000, fre: 500, pin: '9012', kontJoint: { nom: 'Marie', prenon: 'Dupont', phone: '509-1111-2222', pin: '3456', seks: 'Fanm', dateNesans: '1982-05-10', nif: '004-567-8901', email: 'marie.d@email.com', adres: 'Delmas', relasyon: 'Mari/Madanm' }, status: 'Aktif' },
-  ]);
-
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
   const [showPin, setShowPin] = useState(false);
@@ -27,50 +24,103 @@ function Clients({ user, kesyeOnly }) {
     relasyon: '', pin: ''
   });
 
+  // CHAJE KLIYAN DEPI SUPABASE
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchClients = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('kliyan')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Erè:', error);
+    } else {
+      setClients(data || []);
+    }
+    setLoading(false);
+  };
+
   const generateNumKont = () => {
     const num = String(clients.length + 1).padStart(4, '0');
     return 'GKP-' + num;
   };
 
-  const addClient = () => {
+  // AJOUTE NOUVO KLIYAN
+  const addClient = async () => {
     if (!form.nom || !form.prenon || !form.phone) return;
-    const saved = localStorage.getItem('gkp_clients');
-    const existing = saved ? JSON.parse(saved) : clients;
-    const newList = [...existing, {
-      id: existing.length + 1,
-      numKont: 'GKP-' + String(existing.length + 1).padStart(4, '0'),
-      ...form,
+    const newClient = {
+      num_kont: generateNumKont(),
+      nom: form.nom,
+      prenon: form.prenon,
+      adres: form.adres,
+      phone: form.phone,
+      email: form.email,
+      nif: form.nif,
+      date_nesans: form.dateNesans,
+      seks: form.seks,
+      deviz: form.deviz,
       balance: parseFloat(form.depoInisyal) || 0,
-      date: new Date().toISOString().split('T')[0],
-      kontJoint: isJoint ? { ...formJoint } : null,
-      status: 'Aktif'
-    }];
-    localStorage.setItem('gkp_clients', JSON.stringify(newList));
-    setClients(newList);
-    setForm({ nom: '', prenon: '', adres: '', phone: '', email: '', nif: '', dateNesans: '', deviz: 'HTG', seks: '', depoInisyal: '', fre: '500', pin: '', branch: '' });
-    setFormJoint({ nom: '', prenon: '', phone: '', email: '', nif: '', dateNesans: '', seks: '', adres: '', relasyon: '', pin: '' });
-    setIsJoint(false);
-    setShowForm(false);
+      depo_inisyal: parseFloat(form.depoInisyal) || 0,
+      fre: parseFloat(form.fre) || 500,
+      pin: form.pin,
+      branch: form.branch || user?.branch,
+      status: 'Aktif',
+      kont_joint: isJoint ? formJoint : null,
+    };
+
+    const { error } = await supabase.from('kliyan').insert([newClient]);
+    if (error) {
+      alert('Erè: ' + error.message);
+    } else {
+      fetchClients();
+      setForm({ nom: '', prenon: '', adres: '', phone: '', email: '', nif: '', dateNesans: '', deviz: 'HTG', seks: '', depoInisyal: '', fre: '500', pin: '', branch: '' });
+      setFormJoint({ nom: '', prenon: '', phone: '', email: '', nif: '', dateNesans: '', seks: '', adres: '', relasyon: '', pin: '' });
+      setIsJoint(false);
+      setShowForm(false);
+    }
   };
 
-  const toggleBloke = (idx) => {
-    const updated = clients.map((c, i) => i === idx
-      ? { ...c, status: c.status === 'Aktif' ? 'Bloke' : 'Aktif' }
-      : c
-    );
-    localStorage.setItem('gkp_clients', JSON.stringify(updated));
-    setClients(updated);
+  // BLOKE / DEBLOKE
+  const toggleBloke = async (client) => {
+    const newStatus = client.status === 'Aktif' ? 'Bloke' : 'Aktif';
+    const { error } = await supabase
+      .from('kliyan')
+      .update({ status: newStatus })
+      .eq('id', client.id);
+    if (!error) fetchClients();
+  };
+
+  // CHANJE PIN
+  const changePin = async (clientId, newPin) => {
+    const { error } = await supabase
+      .from('kliyan')
+      .update({ pin: newPin })
+      .eq('id', clientId);
+    if (!error) {
+      fetchClients();
+      setShowDetail({ ...showDetail, pin: newPin });
+      alert('PIN chanje avèk siksè!');
+    }
   };
 
   const filtered = clients.filter(c =>
-    c.nom.toLowerCase().includes(search.toLowerCase()) ||
-    c.prenon.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search) ||
-    c.numKont.includes(search)
+    (c.nom + ' ' + c.prenon).toLowerCase().includes(search.toLowerCase()) ||
+    (c.phone || '').includes(search) ||
+    (c.num_kont || '').includes(search)
   );
 
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '13px' };
   const labelStyle = { display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' };
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', flexDirection: 'column', gap: '15px' }}>
+      <div style={{ fontSize: '40px' }}>⏳</div>
+      <p style={{ color: '#1a5c2a', fontWeight: '700', fontSize: '16px' }}>Chaje kliyan yo...</p>
+    </div>
+  );
 
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
@@ -81,11 +131,9 @@ function Clients({ user, kesyeOnly }) {
           <h1 style={{ margin: 0, color: '#1a5c2a', fontSize: '24px', fontWeight: '800' }}>Jesyon Kliyan</h1>
           <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>{clients.length} kliyan total</p>
         </div>
-        <button onClick={() => { setShowForm(!showForm); setIsJoint(false); }} style={{
-          background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)',
-          color: 'white', border: 'none', borderRadius: '10px',
-          padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700'
-        }}>Nouvo Kliyan</button>
+        <button onClick={() => { setShowForm(!showForm); setIsJoint(false); }} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
+          Nouvo Kliyan
+        </button>
       </div>
 
       {/* STATS */}
@@ -93,7 +141,7 @@ function Clients({ user, kesyeOnly }) {
         {[
           { label: 'Total Kliyan', value: clients.length, icon: '👥', color: '#1a5c2a' },
           { label: 'Kont Aktif', value: clients.filter(c => c.status === 'Aktif').length, icon: '✅', color: '#2ecc71' },
-          { label: 'Kont Joint', value: clients.filter(c => c.kontJoint).length, icon: '👫', color: '#3498db' },
+          { label: 'Kont Joint', value: clients.filter(c => c.kont_joint).length, icon: '👫', color: '#3498db' },
         ].map((s, i) => (
           <div key={i} style={{ background: 'white', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderLeft: '5px solid ' + s.color, display: 'flex', alignItems: 'center', gap: '15px' }}>
             <span style={{ fontSize: '32px' }}>{s.icon}</span>
@@ -168,45 +216,26 @@ function Clients({ user, kesyeOnly }) {
                   {isJoint && <span style={{ color: 'white', fontSize: '14px', fontWeight: '800' }}>✓</span>}
                 </div>
                 <div>
-                  <div style={{ fontWeight: '700', fontSize: '15px', color: isJoint ? '#3498db' : '#333' }}>👫 Aktive Kont Joint (2 Titilè)</div>
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>Toude titile ka fe retre endepandaman ak pwop PIN pa yo</div>
+                  <div style={{ fontWeight: '700', fontSize: '15px', color: isJoint ? '#3498db' : '#333' }}>👫 Aktive Kont Joint</div>
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>Toude titile ka fe retre endepandaman</div>
                 </div>
               </div>
               {isJoint && (
-                <div>
-                  <div style={{ background: '#3498db', color: 'white', padding: '10px 15px', borderRadius: '8px', fontWeight: '700', fontSize: '14px', marginBottom: '15px' }}>
-                    Dezyem Titile — Enfòmasyon Pèsonèl
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
+                  <div><label style={labelStyle}>Non</label><input value={formJoint.nom} onChange={e => setFormJoint({...formJoint, nom: e.target.value})} placeholder="Non..." style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Prenon</label><input value={formJoint.prenon} onChange={e => setFormJoint({...formJoint, prenon: e.target.value})} placeholder="Prenon..." style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Telefon</label><input value={formJoint.phone} onChange={e => setFormJoint({...formJoint, phone: e.target.value})} placeholder="509-XXXX-XXXX" style={inputStyle} /></div>
+                  <div><label style={labelStyle}>Relasyon</label>
+                    <select value={formJoint.relasyon} onChange={e => setFormJoint({...formJoint, relasyon: e.target.value})} style={inputStyle}>
+                      <option value="">Chwazi...</option>
+                      <option value="Mari/Madanm">Mari / Madanm</option>
+                      <option value="Pitit">Pitit</option>
+                      <option value="Paran">Paran</option>
+                      <option value="Fre/Se">Fre / Se</option>
+                      <option value="Asosye">Asosye</option>
+                    </select>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
-                    <div><label style={labelStyle}>Non</label><input value={formJoint.nom} onChange={e => setFormJoint({...formJoint, nom: e.target.value})} placeholder="Non..." style={inputStyle} /></div>
-                    <div><label style={labelStyle}>Prenon</label><input value={formJoint.prenon} onChange={e => setFormJoint({...formJoint, prenon: e.target.value})} placeholder="Prenon..." style={inputStyle} /></div>
-                    <div>
-                      <label style={labelStyle}>Seks</label>
-                      <select value={formJoint.seks} onChange={e => setFormJoint({...formJoint, seks: e.target.value})} style={inputStyle}>
-                        <option value="">Chwazi...</option>
-                        <option value="Gason">Gason</option>
-                        <option value="Fanm">Fanm</option>
-                      </select>
-                    </div>
-                    <div><label style={labelStyle}>Dat de Nesans</label><input type="date" value={formJoint.dateNesans} onChange={e => setFormJoint({...formJoint, dateNesans: e.target.value})} style={inputStyle} /></div>
-                    <div><label style={labelStyle}>Telefon</label><input value={formJoint.phone} onChange={e => setFormJoint({...formJoint, phone: e.target.value})} placeholder="509-XXXX-XXXX" style={inputStyle} /></div>
-                    <div><label style={labelStyle}>Email</label><input value={formJoint.email} onChange={e => setFormJoint({...formJoint, email: e.target.value})} placeholder="email@..." style={inputStyle} /></div>
-                    <div><label style={labelStyle}>Adres</label><input value={formJoint.adres} onChange={e => setFormJoint({...formJoint, adres: e.target.value})} placeholder="Adres..." style={inputStyle} /></div>
-                    <div><label style={labelStyle}>ID / CIN</label><input value={formJoint.nif} onChange={e => setFormJoint({...formJoint, nif: e.target.value})} placeholder="ID Nasyonal..." style={inputStyle} /></div>
-                    <div>
-                      <label style={labelStyle}>Relasyon ak Titile 1</label>
-                      <select value={formJoint.relasyon} onChange={e => setFormJoint({...formJoint, relasyon: e.target.value})} style={inputStyle}>
-                        <option value="">Chwazi...</option>
-                        <option value="Mari/Madanm">Mari / Madanm</option>
-                        <option value="Pitit">Pitit</option>
-                        <option value="Paran">Paran</option>
-                        <option value="Fre/Se">Fre / Se</option>
-                        <option value="Asosye">Asosye</option>
-                        <option value="Lot">Lot</option>
-                      </select>
-                    </div>
-                    <div><label style={labelStyle}>PIN Titile 2 (4 chif)</label><input type="password" value={formJoint.pin} onChange={e => setFormJoint({...formJoint, pin: e.target.value})} placeholder="****" maxLength="4" style={inputStyle} /></div>
-                  </div>
+                  <div><label style={labelStyle}>PIN (4 chif)</label><input type="password" value={formJoint.pin} onChange={e => setFormJoint({...formJoint, pin: e.target.value})} placeholder="****" maxLength="4" style={inputStyle} /></div>
                 </div>
               )}
             </div>
@@ -235,27 +264,25 @@ function Clients({ user, kesyeOnly }) {
             <div style={{ background: showDetail.status === 'Bloke' ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '12px', padding: '20px', color: 'white', marginBottom: '20px', textAlign: 'center' }}>
               <div style={{ fontSize: '40px', marginBottom: '10px' }}>{showDetail.seks === 'Fanm' ? '👩' : '👨'}</div>
               <h3 style={{ margin: '0 0 5px' }}>{showDetail.nom} {showDetail.prenon}</h3>
-              <p style={{ margin: '0 0 5px', opacity: 0.85, fontSize: '13px' }}>{showDetail.numKont}</p>
-              <p style={{ margin: '0 0 5px', fontSize: '22px', fontWeight: '800' }}>{showDetail.deviz} {showDetail.balance.toLocaleString()}</p>
+              <p style={{ margin: '0 0 5px', opacity: 0.85, fontSize: '13px' }}>{showDetail.num_kont}</p>
+              <p style={{ margin: '0 0 5px', fontSize: '22px', fontWeight: '800' }}>{showDetail.deviz} {showDetail.balance?.toLocaleString()}</p>
               <span style={{ background: showDetail.status === 'Bloke' ? '#fff3e0' : 'rgba(255,255,255,0.2)', color: showDetail.status === 'Bloke' ? '#e67e22' : 'white', padding: '4px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
                 {showDetail.status === 'Bloke' ? '🔒 Kont Bloke' : '✅ Kont Aktif'}
               </span>
             </div>
 
-            <h4 style={{ color: '#1a5c2a', margin: '0 0 10px' }}>Enfòmasyon Kliyan</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
               {[
                 { label: 'Telefon', value: showDetail.phone },
                 { label: 'Email', value: showDetail.email || 'N/A' },
                 { label: 'Adres', value: showDetail.adres },
                 { label: 'NIF/CIN', value: showDetail.nif },
-                { label: 'Dat Nesans', value: showDetail.dateNesans },
+                { label: 'Dat Nesans', value: showDetail.date_nesans },
                 { label: 'Seks', value: showDetail.seks },
                 { label: 'Branch', value: showDetail.branch },
                 { label: 'Deviz', value: showDetail.deviz },
-                { label: 'Depo Inisyal', value: showDetail.deviz + ' ' + showDetail.depoInisyal },
+                { label: 'Depo Inisyal', value: showDetail.deviz + ' ' + showDetail.depo_inisyal },
                 { label: 'Fre Ouveti', value: 'HTG ' + showDetail.fre },
-                { label: 'Dat Ouveti', value: showDetail.date },
               ].map((item, i) => (
                 <div key={i} style={{ background: '#f9f9f9', borderRadius: '8px', padding: '10px' }}>
                   <div style={{ fontSize: '11px', color: '#999', marginBottom: '3px' }}>{item.label}</div>
@@ -264,9 +291,9 @@ function Clients({ user, kesyeOnly }) {
               ))}
             </div>
 
-            {/* PIN SECTION */}
+            {/* PIN */}
             <div style={{ background: '#fff3e0', borderRadius: '10px', padding: '15px', marginBottom: '15px', border: '2px solid #f39c12' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isAdmin ? '10px' : '0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <div style={{ fontWeight: '700', color: '#e67e22', fontSize: '14px' }}>🔑 PIN Kliyan</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '4px', color: '#333' }}>
@@ -279,14 +306,9 @@ function Clients({ user, kesyeOnly }) {
               </div>
               {isAdmin && (
                 <button onClick={() => {
-                  const newPin = prompt('Nouvo PIN pou ' + showDetail.nom + ' ' + showDetail.prenon + ' (4 chif):');
+                  const newPin = prompt('Nouvo PIN (4 chif):');
                   if (newPin && newPin.length === 4 && !isNaN(newPin)) {
-                    const updated = clients.map(c => c.id === showDetail.id ? { ...c, pin: newPin } : c);
-                    localStorage.setItem('gkp_clients', JSON.stringify(updated));
-                    setClients(updated);
-                    setShowDetail({ ...showDetail, pin: newPin });
-                    setShowPin(false);
-                    alert('PIN chanje avèk siksè!');
+                    changePin(showDetail.id, newPin);
                   } else if (newPin !== null) {
                     alert('PIN dwe gen egzakteman 4 chif!');
                   }
@@ -295,46 +317,6 @@ function Clients({ user, kesyeOnly }) {
                 </button>
               )}
             </div>
-
-            {showDetail.kontJoint && (
-              <div>
-                <h4 style={{ color: '#3498db', margin: '0 0 10px' }}>👫 Titile 2 — Kont Joint</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-                  {[
-                    { label: 'Non', value: showDetail.kontJoint.nom + ' ' + showDetail.kontJoint.prenon },
-                    { label: 'Telefon', value: showDetail.kontJoint.phone },
-                    { label: 'Relasyon', value: showDetail.kontJoint.relasyon },
-                    { label: 'Seks', value: showDetail.kontJoint.seks },
-                  ].map((item, i) => (
-                    <div key={i} style={{ background: '#ebf5fb', borderRadius: '8px', padding: '10px' }}>
-                      <div style={{ fontSize: '11px', color: '#3498db', marginBottom: '3px' }}>{item.label}</div>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>{item.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* PIN TITILE 2 */}
-                {isAdmin && (
-                  <div style={{ background: '#ebf5fb', borderRadius: '10px', padding: '15px', border: '2px solid #3498db' }}>
-                    <div style={{ fontWeight: '700', color: '#3498db', fontSize: '14px', marginBottom: '10px' }}>🔑 PIN Titile 2</div>
-                    <button onClick={() => {
-                      const newPin = prompt('Nouvo PIN pou ' + showDetail.kontJoint.nom + ' (4 chif):');
-                      if (newPin && newPin.length === 4 && !isNaN(newPin)) {
-                        const updated = clients.map(c => c.id === showDetail.id ? { ...c, kontJoint: { ...c.kontJoint, pin: newPin } } : c);
-                        localStorage.setItem('gkp_clients', JSON.stringify(updated));
-                        setClients(updated);
-                        setShowDetail({ ...showDetail, kontJoint: { ...showDetail.kontJoint, pin: newPin } });
-                        alert('PIN Titile 2 chanje avèk siksè!');
-                      } else if (newPin !== null) {
-                        alert('PIN dwe gen egzakteman 4 chif!');
-                      }
-                    }} style={{ width: '100%', padding: '8px', background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}>
-                      🔄 Chanje PIN Titile 2
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -352,53 +334,56 @@ function Clients({ user, kesyeOnly }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
-              {['Nimewo Kont', 'Non Konple', 'Telefon', 'Deviz', 'Balans', 'Branch', 'Kont Joint', 'Estati', 'Aksyon'].map((h, i) => (
+              {['Nimewo Kont', 'Non Konple', 'Telefon', 'Deviz', 'Balans', 'Branch', 'Estati', 'Aksyon'].map((h, i) => (
                 <th key={i} style={{ padding: '15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((client, i) => (
-              <tr key={client.id} style={{ background: client.status === 'Bloke' ? '#fff8f8' : (i % 2 === 0 ? '#f9f9f9' : 'white'), borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '14px 15px', fontWeight: '700', color: '#1a5c2a', fontSize: '12px' }}>{client.numKont}</td>
-                <td style={{ padding: '14px 15px', fontWeight: '600' }}>{client.nom} {client.prenon}</td>
-                <td style={{ padding: '14px 15px', color: '#666' }}>{client.phone}</td>
-                <td style={{ padding: '14px 15px' }}>
-                  <span style={{ background: client.deviz === 'USD' ? '#ebf5fb' : '#e8f5e9', color: client.deviz === 'USD' ? '#3498db' : '#1a5c2a', padding: '3px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '700' }}>
-                    {client.deviz}
-                  </span>
-                </td>
-                <td style={{ padding: '14px 15px', fontWeight: '700', color: '#2d8a45' }}>{client.deviz} {client.balance.toLocaleString()}</td>
-                <td style={{ padding: '14px 15px' }}>
-                  <span style={{ background: '#e8f5e9', color: '#1a5c2a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
-                    {client.branch}
-                  </span>
-                </td>
-                <td style={{ padding: '14px 15px', fontSize: '12px' }}>
-                  {client.kontJoint
-                    ? <span style={{ background: '#ebf5fb', color: '#3498db', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>👫 {client.kontJoint.nom}</span>
-                    : <span style={{ color: '#ccc' }}>—</span>
-                  }
-                </td>
-                <td style={{ padding: '14px 15px' }}>
-                  <span style={{ background: client.status === 'Bloke' ? '#fdf2f2' : '#e8f5e9', color: client.status === 'Bloke' ? '#e74c3c' : '#1a5c2a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700', border: '1px solid ' + (client.status === 'Bloke' ? '#e74c3c' : '#1a5c2a') }}>
-                    {client.status === 'Bloke' ? '🔒 Bloke' : '✅ Aktif'}
-                  </span>
-                </td>
-                <td style={{ padding: '14px 15px' }}>
-                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                    <button onClick={() => { setShowDetail(client); setShowPin(false); }} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
-                      Detay
-                    </button>
-                    {isAdmin && (
-                      <button onClick={() => toggleBloke(i)} style={{ background: client.status === 'Aktif' ? '#e74c3c' : '#2ecc71', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
-                        {client.status === 'Aktif' ? '🔒' : '🔓'}
-                      </button>
-                    )}
-                  </div>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan="8" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+                  Pa gen kliyan ankò
                 </td>
               </tr>
-            ))}
+            ) : (
+              filtered.map((client, i) => (
+                <tr key={client.id} style={{ background: client.status === 'Bloke' ? '#fff8f8' : (i % 2 === 0 ? '#f9f9f9' : 'white'), borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '14px 15px', fontWeight: '700', color: '#1a5c2a', fontSize: '12px' }}>{client.num_kont}</td>
+                  <td style={{ padding: '14px 15px', fontWeight: '600' }}>{client.nom} {client.prenon}</td>
+                  <td style={{ padding: '14px 15px', color: '#666' }}>{client.phone}</td>
+                  <td style={{ padding: '14px 15px' }}>
+                    <span style={{ background: client.deviz === 'USD' ? '#ebf5fb' : '#e8f5e9', color: client.deviz === 'USD' ? '#3498db' : '#1a5c2a', padding: '3px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '700' }}>
+                      {client.deviz}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 15px', fontWeight: '700', color: '#2d8a45' }}>{client.deviz} {client.balance?.toLocaleString()}</td>
+                  <td style={{ padding: '14px 15px' }}>
+                    <span style={{ background: '#e8f5e9', color: '#1a5c2a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
+                      {client.branch}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 15px' }}>
+                    <span style={{ background: client.status === 'Bloke' ? '#fdf2f2' : '#e8f5e9', color: client.status === 'Bloke' ? '#e74c3c' : '#1a5c2a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700', border: '1px solid ' + (client.status === 'Bloke' ? '#e74c3c' : '#1a5c2a') }}>
+                      {client.status === 'Bloke' ? '🔒 Bloke' : '✅ Aktif'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 15px' }}>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <button onClick={() => { setShowDetail(client); setShowPin(false); }} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
+                        Detay
+                      </button>
+                      {isAdmin && (
+                        <button onClick={() => toggleBloke(client)} style={{ background: client.status === 'Aktif' ? '#e74c3c' : '#2ecc71', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
+                          {client.status === 'Aktif' ? '🔒' : '🔓'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
