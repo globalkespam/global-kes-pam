@@ -23,6 +23,7 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
 
   useEffect(() => {
     fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchStats = async () => {
