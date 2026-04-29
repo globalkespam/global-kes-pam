@@ -1,110 +1,129 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 
 function Loans({ user }) {
-  const [view, setView] = useState('list');
-  const [loans, setLoans] = useState([
-    { id: 'PRE-001', numKont: 'GKP-2026-0001', client: 'Marie Joseph', prensipa: 50000, res: 35000, taux: 3, penalite: 2, dire: 12, tipRembou: 'Chak Mwa', garanti: 'Kay', branch: 'Branch Potoprens', date: '2026-01-15', status: 'Aktif' },
-    { id: 'PRE-002', numKont: 'GKP-2026-0002', client: 'Jean Pierre', prensipa: 200000, res: 200000, taux: 2.5, penalite: 2, dire: 24, tipRembou: 'Chak Mwa', garanti: 'Machin', branch: 'Branch Kapo', date: '2026-02-20', status: 'Aktif' },
-  ]);
-
-  const [form, setForm] = useState({
-    numKont: '', montan: '', taux: '3', dire: '12', penalite: '2',
-    tipRembou: 'Chak Mwa', garanti: ''
-  });
-  const [calcResult, setCalcResult] = useState(null);
-  const [showRembou, setShowRembou] = useState(null);
-  const [rembouAmount, setRembouAmount] = useState('');
-  const [rembouSuccess, setRembouSuccess] = useState(false);
-
+  const [loans, setLoans] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [showRemboure, setShowRemboure] = useState(null);
+  const [montanRemboure, setMontanRemboure] = useState('');
   const isAdmin = user?.role === 'Admin';
 
-  const clients = [
-    { numKont: 'GKP-2026-0001', nom: 'Marie Joseph' },
-    { numKont: 'GKP-2026-0002', nom: 'Jean Pierre' },
-    { numKont: 'GKP-2026-0003', nom: 'Paul Joseph' },
-  ];
+  const [form, setForm] = useState({
+    numKont: '', montan: '', taux: '5', dire: '12',
+    penalite: '0', garanti: '', tipRembou: 'Chak Mwa'
+  });
 
-  const kalkile = () => {
-    const P = parseFloat(form.montan);
-    const r = parseFloat(form.taux) / 100;
-    const n = parseInt(form.dire);
-    if (!P || !r || !n) return;
-    const peman = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-    const totalPeman = peman * n;
-    const totalEnterè = totalPeman - P;
-    setCalcResult({ peman: peman.toFixed(2), totalPeman: totalPeman.toFixed(2), totalEntere: totalEnterè.toFixed(2) });
+  useEffect(() => {
+    fetchLoans();
+    fetchClients();
+  }, []);
+
+  const fetchLoans = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('pre')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setLoans(data || []);
+    setLoading(false);
   };
 
-  const apwouvePre = () => {
+  const fetchClients = async () => {
+    const { data } = await supabase.from('kliyan').select('*');
+    setClients(data || []);
+  };
+
+  const calcPeman = () => {
+    const P = parseFloat(form.montan) || 0;
+    const r = (parseFloat(form.taux) || 0) / 100 / 12;
+    const n = parseInt(form.dire) || 12;
+    if (r === 0) return P / n;
+    return (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+  };
+
+  const addLoan = async () => {
     if (!form.numKont || !form.montan) return;
-    const client = clients.find(c => c.numKont === form.numKont);
-    const newLoan = {
-      id: 'PRE-00' + (loans.length + 1),
-      numKont: form.numKont,
-      client: client ? client.nom : form.numKont,
-      prensipa: parseFloat(form.montan),
-      res: parseFloat(form.montan),
+    const client = clients.find(c => c.num_kont === form.numKont);
+    if (!client) { alert('Kliyan pa jwenn!'); return; }
+
+    const peman = calcPeman();
+    const { error } = await supabase.from('pre').insert([{
+      num_kont: form.numKont,
+      client: client.nom + ' ' + client.prenon,
+      montan: parseFloat(form.montan),
       taux: parseFloat(form.taux),
-      penalite: parseFloat(form.penalite),
       dire: parseInt(form.dire),
-      tipRembou: form.tipRembou,
+      peman_chak_mwa: peman,
+      penalite: parseFloat(form.penalite) || 0,
       garanti: form.garanti,
-      branch: user?.branch || '',
-      date: new Date().toISOString().split('T')[0],
-      status: 'Aktif'
-    };
-    setLoans([...loans, newLoan]);
-    setForm({ numKont: '', montan: '', taux: '3', dire: '12', penalite: '2', tipRembou: 'Chak Mwa', garanti: '' });
-    setCalcResult(null);
-    setView('list');
+      status: 'Aktif',
+      branch: user?.branch,
+    }]);
+
+    if (error) { alert('Erè: ' + error.message); return; }
+    fetchLoans();
+    setForm({ numKont: '', montan: '', taux: '5', dire: '12', penalite: '0', garanti: '', tipRembou: 'Chak Mwa' });
+    setShowForm(false);
   };
 
-  const handleRembou = (loan) => {
-    if (!rembouAmount) return;
-    setLoans(loans.map(l => {
-      if (l.id === loan.id) {
-        const newRes = Math.max(0, l.res - parseFloat(rembouAmount));
-        return { ...l, res: newRes, status: newRes === 0 ? 'Peye' : 'Aktif' };
-      }
-      return l;
-    }));
-    setRembouSuccess(true);
-    setTimeout(() => { setRembouSuccess(false); setShowRembou(null); setRembouAmount(''); }, 2000);
+  const remboure = async () => {
+    if (!showRemboure || !montanRemboure) return;
+    const montan = parseFloat(montanRemboure);
+    const resteApeye = showRemboure.montan - montan;
+
+    const newStatus = resteApeye <= 0 ? 'Peye' : 'Aktif';
+    await supabase.from('pre').update({ status: newStatus }).eq('id', showRemboure.id);
+
+    // Sove tranzaksyon rembourseman
+    await supabase.from('tranzaksyon').insert([{
+      type: 'Peman Pre',
+      num_kont: showRemboure.num_kont,
+      client: showRemboure.client,
+      montan: montan,
+      deviz: 'HTG',
+      branch: user?.branch,
+      kesye: user?.name,
+      ref: 'GKP-' + Date.now().toString().slice(-8),
+    }]);
+
+    fetchLoans();
+    setShowRemboure(null);
+    setMontanRemboure('');
+    alert('Rembourseman anrejistre!');
   };
 
-  const inputStyle = { width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
-  const labelStyle = { display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '11px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px' };
+  const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '13px' };
+  const labelStyle = { display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' };
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', flexDirection: 'column', gap: '15px' }}>
+      <div style={{ fontSize: '40px' }}>⏳</div>
+      <p style={{ color: '#1a5c2a', fontWeight: '700' }}>Chaje prè yo...</p>
+    </div>
+  );
 
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
-
-      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
         <div>
-          <h1 style={{ margin: 0, color: '#1a5c2a', fontSize: '24px', fontWeight: '800' }}>Jesyon Pre</h1>
-          <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>
-            {loans.filter(l => l.status === 'Aktif').length} pre aktif
-          </p>
+          <h1 style={{ margin: 0, color: '#1a5c2a', fontSize: '24px', fontWeight: '800' }}>Jesyon Prè</h1>
+          <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>{loans.length} prè total</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          {isAdmin && (
-            <button onClick={() => setView(view === 'list' ? 'create' : 'list')} style={{
-              background: view === 'create' ? '#e74c3c' : 'linear-gradient(135deg, #1a5c2a, #2d8a45)',
-              color: 'white', border: 'none', borderRadius: '10px',
-              padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700'
-            }}>
-              {view === 'create' ? 'Retounen' : 'Kreye Nouvo Pre'}
-            </button>
-          )}
-        </div>
+        {isAdmin && (
+          <button onClick={() => setShowForm(!showForm)} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
+            + Nouvo Prè
+          </button>
+        )}
       </div>
 
       {/* STATS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '25px' }}>
         {[
-          { label: 'Pre Aktif', value: loans.filter(l => l.status === 'Aktif').length, icon: '📋', color: '#f39c12' },
-          { label: 'Total Pre', value: loans.length, icon: '📊', color: '#3498db' },
-          { label: 'Pre Peye', value: loans.filter(l => l.status === 'Peye').length, icon: '✅', color: '#2ecc71' },
+          { label: 'Total Prè', value: loans.length, icon: '📋', color: '#1a5c2a' },
+          { label: 'Prè Aktif', value: loans.filter(l => l.status === 'Aktif').length, icon: '✅', color: '#f39c12' },
+          { label: 'Prè Peye', value: loans.filter(l => l.status === 'Peye').length, icon: '💚', color: '#2ecc71' },
         ].map((s, i) => (
           <div key={i} style={{ background: 'white', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderLeft: '5px solid ' + s.color, display: 'flex', alignItems: 'center', gap: '15px' }}>
             <span style={{ fontSize: '32px' }}>{s.icon}</span>
@@ -116,171 +135,104 @@ function Loans({ user }) {
         ))}
       </div>
 
-      {/* KREYE PRE VIEW */}
-      {view === 'create' && isAdmin && (
-        <div style={{ background: 'white', borderRadius: '16px', padding: '30px', marginBottom: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-          <h2 style={{ margin: '0 0 25px', color: '#1a5c2a', fontSize: '18px', fontWeight: '800' }}>
-            Kreye Pre
-          </h2>
-
-          {/* FORM */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', marginBottom: '20px' }}>
-            <div>
-              <label style={labelStyle}>Kont Kliyan</label>
-              <input 
-  value={form.numKont} 
-  onChange={e => setForm({...form, numKont: e.target.value})}
-  placeholder="GKP-XXXX"
-  style={inputStyle} 
-/>
-            </div>
-            <div>
-              <label style={labelStyle}>Montan Pre</label>
-              <input type="number" value={form.montan} onChange={e => setForm({...form, montan: e.target.value})} placeholder="0.00" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>To Entere (%) / Mwa</label>
-              <input type="number" value={form.taux} onChange={e => setForm({...form, taux: e.target.value})} placeholder="3" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Dire (Mwa)</label>
-              <input type="number" value={form.dire} onChange={e => setForm({...form, dire: e.target.value})} placeholder="12" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Penalite (%)</label>
-              <input type="number" value={form.penalite} onChange={e => setForm({...form, penalite: e.target.value})} placeholder="2" style={inputStyle} />
-            </div>
+      {/* FORM NOUVO PRE */}
+      {showForm && isAdmin && (
+        <div style={{ background: 'white', borderRadius: '16px', padding: '30px', marginBottom: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)', border: '2px solid #1a5c2a' }}>
+          <h3 style={{ margin: '0 0 20px', color: '#1a5c2a' }}>Nouvo Prè</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '20px' }}>
+            <div><label style={labelStyle}>Nimewo Kont Kliyan</label><input value={form.numKont} onChange={e => setForm({...form, numKont: e.target.value})} placeholder="GKP-XXXX" style={inputStyle} /></div>
+            <div><label style={labelStyle}>Montan Prè (HTG)</label><input type="number" value={form.montan} onChange={e => setForm({...form, montan: e.target.value})} placeholder="0" style={inputStyle} /></div>
+            <div><label style={labelStyle}>Taux Enterè (%)</label><input type="number" value={form.taux} onChange={e => setForm({...form, taux: e.target.value})} placeholder="5" style={inputStyle} /></div>
+            <div><label style={labelStyle}>Dire (Mwa)</label><input type="number" value={form.dire} onChange={e => setForm({...form, dire: e.target.value})} placeholder="12" style={inputStyle} /></div>
+            <div><label style={labelStyle}>Penalite (%)</label><input type="number" value={form.penalite} onChange={e => setForm({...form, penalite: e.target.value})} placeholder="0" style={inputStyle} /></div>
+            <div><label style={labelStyle}>Garanti</label><input value={form.garanti} onChange={e => setForm({...form, garanti: e.target.value})} placeholder="Garanti..." style={inputStyle} /></div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-            <div>
-              <label style={labelStyle}>Tip Rembousman</label>
-              <select value={form.tipRembou} onChange={e => setForm({...form, tipRembou: e.target.value})} style={inputStyle}>
-                <option value="Chak Mwa">Chak Mwa</option>
-                <option value="Chak 2 Semèn">Chak 2 Semèn</option>
-                <option value="Chak Semèn">Chak Semèn</option>
-                <option value="Fen Dire">Fen Dire (Bullet)</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Garanti</label>
-              <input value={form.garanti} onChange={e => setForm({...form, garanti: e.target.value})} placeholder="Kay, machin, bijou..." style={inputStyle} />
-            </div>
-          </div>
-
-          {/* BOUTON */}
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <button onClick={kalkile} style={{ padding: '12px 25px', background: '#f0f0f0', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              Kalkile
-            </button>
-            <button onClick={apwouvePre} style={{ padding: '12px 25px', background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px', color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              Apwouve Pre
-            </button>
-          </div>
-
-          {/* REZILTA KALKIL */}
-          {calcResult && (
-            <div style={{ background: '#e8f5e9', borderRadius: '12px', padding: '20px', border: '2px solid #1a5c2a' }}>
-              <h4 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px' }}>Rezilta Kalkil</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
-                {[
-                  { label: 'Peman Chak Mwa', value: 'HTG ' + parseFloat(calcResult.peman).toLocaleString() },
-                  { label: 'Total Peman', value: 'HTG ' + parseFloat(calcResult.totalPeman).toLocaleString() },
-                  { label: 'Total Entere', value: 'HTG ' + parseFloat(calcResult.totalEntere).toLocaleString() },
-                ].map((item, i) => (
-                  <div key={i} style={{ background: 'white', borderRadius: '10px', padding: '15px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: '#666', marginBottom: '5px' }}>{item.label}</div>
-                    <div style={{ fontSize: '18px', fontWeight: '800', color: '#1a5c2a' }}>{item.value}</div>
-                  </div>
-                ))}
+          {form.montan && (
+            <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '15px', marginBottom: '20px', border: '2px solid #1a5c2a' }}>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: '#1a5c2a' }}>
+                Peman Chak Mwa: <span style={{ fontSize: '20px' }}>HTG {calcPeman().toLocaleString('fr-HT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                Total ap peye: HTG {(calcPeman() * parseInt(form.dire || 12)).toLocaleString('fr-HT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           )}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={addLoan} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '12px 30px', cursor: 'pointer', fontWeight: '700' }}>Kreye Prè</button>
+            <button onClick={() => setShowForm(false)} style={{ background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', padding: '12px 30px', cursor: 'pointer', fontWeight: '700' }}>Anile</button>
+          </div>
         </div>
       )}
 
       {/* MODAL REMBOURE */}
-      {showRembou && (
+      {showRemboure && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '400px', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
-            {rembouSuccess ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>
-                <div style={{ fontSize: '50px', marginBottom: '15px' }}>✅</div>
-                <h3 style={{ color: '#1a5c2a', margin: 0 }}>Rembourseman Konfime!</h3>
-              </div>
-            ) : (
-              <>
-                <h3 style={{ margin: '0 0 20px', color: '#1a5c2a' }}>Remboure Pre</h3>
-                <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '15px', marginBottom: '20px' }}>
-                  <div style={{ fontWeight: '700', color: '#1a5c2a' }}>{showRembou.client}</div>
-                  <div style={{ fontSize: '13px', color: '#666' }}>{showRembou.id} • {showRembou.numKont}</div>
-                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#e74c3c', marginTop: '5px' }}>
-                    Res: HTG {showRembou.res.toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
-                    Peman chak mwa: HTG {((showRembou.prensipa * (showRembou.taux/100) * Math.pow(1 + showRembou.taux/100, showRembou.dire)) / (Math.pow(1 + showRembou.taux/100, showRembou.dire) - 1)).toFixed(2)}
-                  </div>
-                </div>
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={labelStyle}>Montan Rembourseman</label>
-                  <input type="number" value={rembouAmount} onChange={e => setRembouAmount(e.target.value)} placeholder="0.00" style={inputStyle} />
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => handleRembou(showRembou)} style={{ background: '#f39c12', color: 'white', border: 'none', borderRadius: '8px', padding: '12px 25px', cursor: 'pointer', fontWeight: '700', flex: 1 }}>
-                    Konfime
-                  </button>
-                  <button onClick={() => setShowRembou(null)} style={{ background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', padding: '12px 20px', cursor: 'pointer', fontWeight: '700' }}>
-                    Anile
-                  </button>
-                </div>
-              </>
-            )}
+          <div style={{ background: 'white', borderRadius: '16px', padding: '30px', width: '400px', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a' }}>Remboure Prè</h3>
+            <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '15px', marginBottom: '20px' }}>
+              <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px' }}>Kliyan: <strong>{showRemboure.client}</strong></div>
+              <div style={{ fontSize: '13px', color: '#666', marginBottom: '5px' }}>Montan Prè: <strong>HTG {showRemboure.montan?.toLocaleString()}</strong></div>
+              <div style={{ fontSize: '13px', color: '#666' }}>Peman Chak Mwa: <strong>HTG {showRemboure.peman_chak_mwa?.toLocaleString('fr-HT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={labelStyle}>Montan Rembourseman (HTG)</label>
+              <input type="number" value={montanRemboure} onChange={e => setMontanRemboure(e.target.value)} placeholder="0" style={inputStyle} />
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={remboure} style={{ flex: 1, background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: '700' }}>Konfime</button>
+              <button onClick={() => { setShowRemboure(null); setMontanRemboure(''); }} style={{ flex: 1, background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: '700' }}>Anile</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* LIST VIEW */}
-      {view === 'list' && (
-        <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
-                {['#', 'Kliyan', 'Prensipa', 'Res', 'Taux', 'Dire', 'Tip Rembou', 'Statut', 'Aksyon'].map((h, i) => (
-                  <th key={i} style={{ padding: '15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
-                ))}
+      {/* LIS PRE */}
+      <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
+              {['Kliyan', 'Nimewo Kont', 'Montan', 'Taux', 'Dire', 'Peman/Mwa', 'Status', 'Aksyon'].map((h, i) => (
+                <th key={i} style={{ padding: '15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loans.length === 0 ? (
+              <tr>
+                <td colSpan="8" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+                  Pa gen prè ankò
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {loans.map((loan, i) => (
+            ) : (
+              loans.map((loan, i) => (
                 <tr key={loan.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '14px 15px', fontWeight: '700', color: '#1a5c2a', fontSize: '12px' }}>{loan.id}</td>
-                  <td style={{ padding: '14px 15px' }}>
-                    <div style={{ fontWeight: '600' }}>{loan.client}</div>
-                    <div style={{ fontSize: '11px', color: '#999' }}>{loan.numKont}</div>
-                  </td>
-                  <td style={{ padding: '14px 15px', fontWeight: '700', color: '#3498db' }}>HTG {loan.prensipa.toLocaleString()}</td>
-                  <td style={{ padding: '14px 15px', fontWeight: '700', color: loan.res > 0 ? '#e74c3c' : '#2ecc71' }}>HTG {loan.res.toLocaleString()}</td>
+                  <td style={{ padding: '14px 15px', fontWeight: '600' }}>{loan.client}</td>
+                  <td style={{ padding: '14px 15px', color: '#1a5c2a', fontWeight: '700', fontSize: '12px' }}>{loan.num_kont}</td>
+                  <td style={{ padding: '14px 15px', fontWeight: '700', color: '#f39c12' }}>HTG {loan.montan?.toLocaleString()}</td>
                   <td style={{ padding: '14px 15px', color: '#666' }}>{loan.taux}%</td>
                   <td style={{ padding: '14px 15px', color: '#666' }}>{loan.dire} mwa</td>
-                  <td style={{ padding: '14px 15px', color: '#666', fontSize: '12px' }}>{loan.tipRembou}</td>
+                  <td style={{ padding: '14px 15px', fontWeight: '700', color: '#1a5c2a' }}>HTG {loan.peman_chak_mwa?.toLocaleString('fr-HT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td style={{ padding: '14px 15px' }}>
-                    <span style={{ background: loan.status === 'Aktif' ? '#fff3e0' : '#e8f5e9', color: loan.status === 'Aktif' ? '#f39c12' : '#2ecc71', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
-                      {loan.status}
+                    <span style={{ background: loan.status === 'Aktif' ? '#fff3e0' : '#e8f5e9', color: loan.status === 'Aktif' ? '#f39c12' : '#2ecc71', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                      {loan.status === 'Aktif' ? '🔄 Aktif' : '✅ Peye'}
                     </span>
                   </td>
                   <td style={{ padding: '14px 15px' }}>
                     {loan.status === 'Aktif' && (
-                      <button onClick={() => { setShowRembou(loan); setRembouAmount(''); }} style={{ background: '#f39c12', color: 'white', border: 'none', borderRadius: '6px', padding: '8px 15px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>
+                      <button onClick={() => setShowRemboure(loan)} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
                         Remboure
                       </button>
                     )}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
