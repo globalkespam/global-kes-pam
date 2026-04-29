@@ -44,9 +44,11 @@ function Clients({ user, kesyeOnly }) {
   };
 
   const generateNumKont = () => {
-    const num = String(clients.length + 1).padStart(4, '0');
-    return 'GKP-' + num;
-  };
+  const num = String(clients.length + 1).padStart(6, '0');
+  const part1 = num.slice(0, 3);
+  const part2 = num.slice(3);
+  return 'GKP-' + part1 + ' ' + part2;
+};
 
   // AJOUTE NOUVO KLIYAN
   const addClient = async () => {
