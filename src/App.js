@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import logo from './assets/logo.jpeg.jpeg';
 import lang from './lang';
+import { supabase } from './supabase';
 
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -12,12 +13,6 @@ import Reports from './pages/Reports';
 import Team from './pages/Team';
 import Settings from './pages/Settings';
 import ExchangeRate from './pages/ExchangeRate';
-
-const initialUsers = [
-  { name: 'Administrateur', password: 'admin123', role: 'Admin', branch: 'Siege Central', blocked: false },
-  { name: 'Marie Kesye', password: 'kesye123', role: 'Kesye', branch: 'Branch Potoprens', blocked: false },
-  { name: 'jude', password: 'jude123', role: 'Kesye', branch: 'Branch Kapo', blocked: false },
-];
 
 const initialBranches = [
   { id: 1, nom: 'Branch Potoprens', adres: 'Delmas 33, Potoprens', telefon: '509-2222-3333', responsab: 'Marie Kesye', status: 'Aktif' },
@@ -43,7 +38,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState('login');
   const [user, setUser] = useState(null);
   const [currentLang, setCurrentLang] = useState('ht');
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState(initialBranches);
   const [oreKes, setOreKes] = useState(initialOreKes);
   const [currentTime, setCurrentTime] = useState('');
@@ -63,6 +58,15 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    const { data } = await supabase.from('itilizate').select('*');
+    setUsers(data || []);
+  };
+
   const isBranchOpen = (branchName) => {
     const ore = oreKes[branchName];
     if (!ore || !ore.aktif) return false;
@@ -80,18 +84,31 @@ function App() {
     return jouOuve && current >= louvri && current < femen;
   };
 
-  const handleLogin = (userData) => {
-    if (userData.role !== 'Admin' && !isBranchOpen(userData.branch)) {
-      const ore = oreKes[userData.branch];
-      alert('Kes ' + userData.branch + ' femen!\nOre: ' + (ore?.louvri || '07:00') + ' - ' + (ore?.femen || '20:00'));
+  const handleLogin = async (userData) => {
+    const { data, error } = await supabase
+      .from('itilizate')
+      .select('*')
+      .eq('name', userData.name)
+      .eq('password', userData.password)
+      .single();
+
+    if (error || !data) {
+      alert('Non oswa modpas enkòrèk!');
       return;
     }
-    const freshUser = users.find(u => u.name === userData.name);
-    if (freshUser && freshUser.blocked) {
+
+    if (data.blocked) {
       alert('Kont ou bloke! Kontakte administrateur.');
       return;
     }
-    setUser(freshUser || userData);
+
+    if (data.role !== 'Admin' && !isBranchOpen(data.branch)) {
+      const ore = oreKes[data.branch];
+      alert('Kes ' + data.branch + ' femen!\nOre: ' + (ore?.louvri || '07:00') + ' - ' + (ore?.femen || '20:00'));
+      return;
+    }
+
+    setUser(data);
     setCurrentPage('dashboard');
   };
 
@@ -246,7 +263,6 @@ function Sidebar({ user, currentPage, navigate, onLogout, currentLang, setCurren
 
   return (
     <aside className="sidebar">
-      {/* LOGO */}
       <div className="sidebar-logo">
         <img src={logo} alt="GKP" style={{ width: '45px', height: '45px', borderRadius: '8px', objectFit: 'contain', background: 'white', padding: '2px' }} />
         <div>
@@ -255,19 +271,15 @@ function Sidebar({ user, currentPage, navigate, onLogout, currentLang, setCurren
         </div>
       </div>
 
-      {/* KESYE SELMAN */}
       {user?.role !== 'Admin' && (
         <div style={{ margin: '0 12px 8px', padding: '8px 12px', background: 'rgba(52,152,219,0.2)', borderRadius: '8px', textAlign: 'center' }}>
-          <span style={{ fontSize: '11px', fontWeight: '700', color: '#3498db', textTransform: 'uppercase' }}>
-            💼 Kesye
-          </span>
+          <span style={{ fontSize: '11px', fontWeight: '700', color: '#3498db', textTransform: 'uppercase' }}>💼 Kesye</span>
           <div style={{ fontSize: '11px', fontWeight: '700', color: isOpen ? '#2ecc71' : '#e74c3c', marginTop: '4px' }}>
             {isOpen ? '✅ Kes Louvri' : '🔒 Kes Femen'}
           </div>
         </div>
       )}
 
-      {/* LANG */}
       <div style={{ margin: '0 12px 8px', position: 'relative' }}>
         <button onClick={() => setShowLang(!showLang)} style={{ width: '100%', padding: '8px 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: '600', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{langFlags[currentLang]}</span>
@@ -284,7 +296,6 @@ function Sidebar({ user, currentPage, navigate, onLogout, currentLang, setCurren
         )}
       </div>
 
-      {/* NAV */}
       <nav className="sidebar-nav">
         {menuItems.map(item => (
           <button key={item.id}
@@ -298,7 +309,6 @@ function Sidebar({ user, currentPage, navigate, onLogout, currentLang, setCurren
         ))}
       </nav>
 
-      {/* FOOTER */}
       <div className="sidebar-footer">
         <div className="user-info">
           <div className="user-avatar">{user?.name?.charAt(0) || 'A'}</div>
