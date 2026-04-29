@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 
-function Settings({ user, users, setUsers, branches, setBranches, oreKes, setOreKes, freTransf, setFreTransf }) {
+function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, setFreTransf }) {
   const [activeTab, setActiveTab] = useState('general');
   const [freOuveti, setFreOuveti] = useState('300');
   const [reserveKont, setReserveKont] = useState('500');
@@ -10,10 +11,65 @@ function Settings({ user, users, setUsers, branches, setBranches, oreKes, setOre
   const [newBranch, setNewBranch] = useState({ nom: '', adres: '', telefon: '', responsab: '' });
   const [showBranchForm, setShowBranchForm] = useState(false);
   const [showPassIndex, setShowPassIndex] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('itilizate').select('*');
+    setUsers(data || []);
+    setLoading(false);
+  };
 
   const showSuccess = (msg) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  const toggleBloke = async (u) => {
+    const { error } = await supabase
+      .from('itilizate')
+      .update({ blocked: !u.blocked })
+      .eq('id', u.id);
+    if (!error) {
+      fetchUsers();
+      showSuccess(u.blocked ? u.name + ' debloke!' : u.name + ' bloke!');
+    }
+  };
+
+  const deleteUser = async (u) => {
+    if (!window.confirm('Ou vle efase ' + u.name + '?')) return;
+    const { error } = await supabase.from('itilizate').delete().eq('id', u.id);
+    if (!error) {
+      fetchUsers();
+      showSuccess(u.name + ' efase!');
+    }
+  };
+
+  const changePassword = async (u, newPass) => {
+    if (!newPass || newPass.length < 4) return;
+    const { error } = await supabase
+      .from('itilizate')
+      .update({ password: newPass })
+      .eq('id', u.id);
+    if (!error) {
+      fetchUsers();
+      showSuccess('Modpas ' + u.name + ' chanje!');
+    }
+  };
+
+  const addUser = async (newUser) => {
+    const { error } = await supabase.from('itilizate').insert([newUser]);
+    if (!error) {
+      fetchUsers();
+      showSuccess('Itilizatè ' + newUser.name + ' kreye!');
+    } else {
+      alert('Erè: ' + error.message);
+    }
   };
 
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
@@ -90,11 +146,11 @@ function Settings({ user, users, setUsers, branches, setBranches, oreKes, setOre
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Transfe</h3>
             <div style={{ marginBottom: '15px' }}>
               <label style={labelStyle}>Fre Transfe Enten (HTG)</label>
-              <input type="number" value={freTransfEtenn} onChange={e => setFreTransfEtenn(e.target.value)} placeholder="50" style={inputStyle} />
+              <input type="number" value={freTransfEtenn} onChange={e => setFreTransfEtenn(e.target.value)} style={inputStyle} />
             </div>
             <div style={{ marginBottom: '15px' }}>
               <label style={labelStyle}>Fre Transfe Branch-Branch (HTG)</label>
-              <input type="number" value={freTransfBranch} onChange={e => setFreTransfBranch(e.target.value)} placeholder="150" style={inputStyle} />
+              <input type="number" value={freTransfBranch} onChange={e => setFreTransfBranch(e.target.value)} style={inputStyle} />
             </div>
             <div style={{ background: '#e8f5e9', borderRadius: '8px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#1a5c2a' }}>
               Enten: HTG {freTransfEtenn} | Branch-Branch: HTG {freTransfBranch}
@@ -128,7 +184,7 @@ function Settings({ user, users, setUsers, branches, setBranches, oreKes, setOre
         <div>
           <div style={{ background: '#e8f5e9', borderRadius: '12px', padding: '15px', marginBottom: '20px', border: '2px solid #1a5c2a' }}>
             <p style={{ margin: 0, color: '#1a5c2a', fontWeight: '600', fontSize: '14px' }}>
-              Fikse le louveti ak femti pou chak branch. Kesye yo pa ka konekte andeyò ore sa yo. Admin ka konekte nenpòt ki le.
+              Fikse le louveti ak femti pou chak branch. Kesye yo pa ka konekte andeyò ore sa yo.
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
@@ -175,9 +231,6 @@ function Settings({ user, users, setUsers, branches, setBranches, oreKes, setOre
                       })}
                     </div>
                   </div>
-                  <div style={{ background: ore.aktif ? '#e8f5e9' : '#fdf2f2', borderRadius: '8px', padding: '10px', marginBottom: '15px', fontSize: '12px', color: ore.aktif ? '#1a5c2a' : '#e74c3c', fontWeight: '600' }}>
-                    {ore.aktif ? 'Louvri: ' + ore.louvri + ' — Femen: ' + ore.femen : 'Branch sa dezaktive'}
-                  </div>
                   <button onClick={() => showSuccess('Ore ' + branch.nom + ' sove!')} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700', width: '100%' }}>
                     Sove Ore
                   </button>
@@ -192,77 +245,68 @@ function Settings({ user, users, setUsers, branches, setBranches, oreKes, setOre
       {activeTab === 'users' && (
         <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
           <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Jere Itilizate</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
-                {['Non', 'Wol', 'Branch', 'Estati', 'Modpas', 'Aksyon'].map((h, i) => (
-                  <th key={i} style={{ padding: '12px 15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u, i) => (
-                <tr key={i} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: '12px 15px', fontWeight: '600' }}>{u.name}</td>
-                  <td style={{ padding: '12px 15px' }}>
-                    <span style={{ background: u.role === 'Admin' ? '#f3e8ff' : '#ebf5fb', color: u.role === 'Admin' ? '#9b59b6' : '#3498db', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 15px', color: '#666', fontSize: '13px' }}>{u.branch}</td>
-                  <td style={{ padding: '12px 15px' }}>
-                    <span style={{ background: u.blocked ? '#fdf2f2' : '#e8f5e9', color: u.blocked ? '#e74c3c' : '#1a5c2a', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
-                      {u.blocked ? 'Bloke' : 'Aktif'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 15px' }}>
-                    <div style={{ position: 'relative', display: 'inline-block' }}>
-                      <input
-                        type={showPassIndex === i ? 'text' : 'password'}
-                        defaultValue={u.password}
-                        onBlur={e => {
-                          const newPass = e.target.value;
-                          if (newPass && newPass !== u.password) {
-                            setUsers(users.map((usr, idx) => idx === i ? { ...usr, password: newPass } : usr));
-                            showSuccess('Modpas ' + u.name + ' chanje!');
-                          }
-                        }}
-                        style={{ padding: '6px 30px 6px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', width: '120px' }}
-                      />
-                      <button
-                        onClick={() => setShowPassIndex(showPassIndex === i ? null : i)}
-                        style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: 0 }}
-                      >
-                        {showPassIndex === i ? '🙈' : '👁️'}
-                      </button>
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px 15px' }}>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      {u.name !== user.name && (
-                        <>
-                          <button onClick={() => {
-                            setUsers(users.map((usr, idx) => idx === i ? { ...usr, blocked: !usr.blocked } : usr));
-                            showSuccess(u.blocked ? u.name + ' debloke!' : u.name + ' bloke!');
-                          }} style={{ background: u.blocked ? '#2ecc71' : '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
-                            {u.blocked ? 'Debloke' : 'Bloke'}
-                          </button>
-                          <button onClick={() => {
-                            if (window.confirm('Ou vle efase ' + u.name + '?')) {
-                              setUsers(users.filter((_, idx) => idx !== i));
-                              showSuccess(u.name + ' efase!');
-                            }
-                          }} style={{ background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
-                            Efase
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>⏳ Chaje...</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
+                  {['Non', 'Wol', 'Branch', 'Estati', 'Modpas', 'Aksyon'].map((h, i) => (
+                    <th key={i} style={{ padding: '12px 15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u, i) => (
+                  <tr key={u.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '12px 15px', fontWeight: '600' }}>{u.name}</td>
+                    <td style={{ padding: '12px 15px' }}>
+                      <span style={{ background: u.role === 'Admin' ? '#f3e8ff' : '#ebf5fb', color: u.role === 'Admin' ? '#9b59b6' : '#3498db', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>{u.role}</span>
+                    </td>
+                    <td style={{ padding: '12px 15px', color: '#666', fontSize: '13px' }}>{u.branch}</td>
+                    <td style={{ padding: '12px 15px' }}>
+                      <span style={{ background: u.blocked ? '#fdf2f2' : '#e8f5e9', color: u.blocked ? '#e74c3c' : '#1a5c2a', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                        {u.blocked ? 'Bloke' : 'Aktif'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 15px' }}>
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <input
+                          type={showPassIndex === i ? 'text' : 'password'}
+                          defaultValue={u.password}
+                          onBlur={e => {
+                            const newPass = e.target.value;
+                            if (newPass && newPass !== u.password) {
+                              changePassword(u, newPass);
+                            }
+                          }}
+                          style={{ padding: '6px 30px 6px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', width: '120px' }}
+                        />
+                        <button onClick={() => setShowPassIndex(showPassIndex === i ? null : i)}
+                          style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: 0 }}>
+                          {showPassIndex === i ? '🙈' : '👁️'}
+                        </button>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 15px' }}>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        {u.name !== user.name && (
+                          <>
+                            <button onClick={() => toggleBloke(u)} style={{ background: u.blocked ? '#2ecc71' : '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
+                              {u.blocked ? 'Debloke' : 'Bloke'}
+                            </button>
+                            <button onClick={() => deleteUser(u)} style={{ background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
+                              Efase
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -356,19 +400,15 @@ function Settings({ user, users, setUsers, branches, setBranches, oreKes, setOre
           </div>
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Jounal Aktivite</h3>
-            {[
-              { action: 'Koneksyon', user: 'Administrateur', time: '08:30' },
-              { action: 'Depo HTG 5,000', user: 'Marie Kesye', time: '09:15' },
-              { action: 'Retre HTG 2,000', user: 'Marie Kesye', time: '10:20' },
-              { action: 'Nouvo Kliyan', user: 'Administrateur', time: '11:10' },
-              { action: 'Koneksyon', user: 'jude', time: '07:05' },
-            ].map((item, i) => (
+            {users.slice(0, 5).map((u, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>{item.action}</div>
-                  <div style={{ fontSize: '11px', color: '#999' }}>{item.user}</div>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>Itilizate: {u.name}</div>
+                  <div style={{ fontSize: '11px', color: '#999' }}>{u.role} — {u.branch}</div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', background: '#f5f5f5', padding: '3px 8px', borderRadius: '6px' }}>{item.time}</div>
+                <span style={{ background: u.blocked ? '#fdf2f2' : '#e8f5e9', color: u.blocked ? '#e74c3c' : '#1a5c2a', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>
+                  {u.blocked ? 'Bloke' : 'Aktif'}
+                </span>
               </div>
             ))}
           </div>
