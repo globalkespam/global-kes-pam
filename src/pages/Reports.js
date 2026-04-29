@@ -13,8 +13,9 @@ function Reports({ user }) {
 
   const branches = ['Tout Branch', 'Branch Potoprens', 'Branch Kapo', 'Siege Central'];
 
-  useEffect(() => {
+ useEffect(() => {
     fetchTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, selectedBranch]);
 
   const fetchTransactions = async () => {
