@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import logo from '../assets/logo.jpeg.jpeg';
 
 function Reports({ user }) {
   const today = new Date().toISOString().split('T')[0];
@@ -13,7 +14,7 @@ function Reports({ user }) {
 
   const branches = ['Tout Branch', 'Branch Potoprens', 'Branch Kapo', 'Siege Central'];
 
- useEffect(() => {
+  useEffect(() => {
     fetchTransactions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, selectedBranch]);
@@ -64,19 +65,31 @@ function Reports({ user }) {
 
   const formatDate = (d) => {
     if (!d) return '';
-    const date = new Date(d);
-    return date.toLocaleDateString('fr-HT');
+    return new Date(d).toLocaleDateString('fr-HT');
   };
 
   const formatTime = (d) => {
     if (!d) return '';
-    const date = new Date(d);
-    return date.toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' });
+    return new Date(d).toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
-      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          body { background: white !important; }
+          @page { size: A4; margin: 15mm; }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; }
+        }
+        .print-only { display: none; }
+      `}</style>
 
       {/* HEADER */}
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
@@ -86,12 +99,17 @@ function Reports({ user }) {
             {isAdmin ? 'Rapo detaye pa dat ak branch' : 'Rapo jounen — ' + user?.branch}
           </p>
         </div>
-        <button onClick={() => window.print()} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
-          Enprime / Telechaje
+        <button onClick={handlePrint} style={{
+          background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)',
+          color: 'white', border: 'none', borderRadius: '10px',
+          padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700',
+          display: 'flex', alignItems: 'center', gap: '8px'
+        }}>
+          🖨️ Enprime Rapo
         </button>
       </div>
 
-      {/* FILTERS — ADMIN SELMAN */}
+      {/* FILTERS */}
       {isAdmin && (
         <div className="no-print" style={{ background: 'white', borderRadius: '16px', padding: '25px', marginBottom: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
           <h3 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '15px', fontWeight: '700' }}>Chèche Rapo</h3>
@@ -132,16 +150,33 @@ function Reports({ user }) {
         </div>
       )}
 
-      {/* PRINT HEADER */}
-      <div style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '16px', padding: '25px', marginBottom: '25px', color: 'white', textAlign: 'center' }}>
-        <h2 style={{ margin: '0 0 5px', fontSize: '22px', fontWeight: '800' }}>GLOBAL KES PAM — GKP</h2>
-        <p style={{ margin: '0 0 5px', opacity: 0.9, fontSize: '15px' }}>
-          Rapo: {isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)}
-        </p>
-        <p style={{ margin: 0, opacity: 0.75, fontSize: '13px' }}>Branch: {isAdmin ? selectedBranch : user?.branch}</p>
+      {/* PRINT HEADER — Parèt sèlman lè enprime */}
+      <div style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '16px', padding: '25px', marginBottom: '25px', color: 'white' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '15px' }}>
+          <img src={logo} alt="GKP" style={{ width: '80px', height: '80px', objectFit: 'contain', background: 'white', borderRadius: '10px', padding: '5px' }} />
+          <div>
+            <h2 style={{ margin: '0 0 5px', fontSize: '24px', fontWeight: '800' }}>GLOBAL KÈS PAM — GKP</h2>
+            <p style={{ margin: '0 0 3px', opacity: 0.9, fontSize: '14px' }}>Sistèm Bancaire Pwofesyonèl</p>
+            <p style={{ margin: 0, opacity: 0.75, fontSize: '13px' }}>
+              Rapo: {isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)} | Branch: {isAdmin ? selectedBranch : user?.branch}
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+          {[
+            { label: 'Dat Jenere', value: new Date().toLocaleDateString('fr-HT') },
+            { label: 'Lè', value: new Date().toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' }) },
+            { label: 'Prepare pa', value: user?.name },
+            { label: 'Branch', value: isAdmin ? selectedBranch : user?.branch },
+          ].map((item, i) => (
+            <div key={i} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
+              <div style={{ fontSize: '10px', opacity: 0.8, marginBottom: '3px' }}>{item.label}</div>
+              <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* LOADING */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: '#1a5c2a', fontWeight: '700' }}>
           ⏳ Chaje tranzaksyon yo...
@@ -167,10 +202,10 @@ function Reports({ user }) {
             ))}
           </div>
 
-          {/* RAPO PA BRANCH — ADMIN SELMAN */}
+          {/* RAPO PA BRANCH */}
           {isAdmin && (
             <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', marginBottom: '25px' }}>
-              <h2 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Rapo pa Branch</h2>
+              <h2 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>📊 Rapo pa Branch</h2>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
@@ -190,6 +225,14 @@ function Reports({ user }) {
                       <td style={{ padding: '12px 15px', fontWeight: '600' }}>{b.count}</td>
                     </tr>
                   ))}
+                  <tr style={{ background: '#1a5c2a', color: 'white', fontWeight: '800' }}>
+                    <td style={{ padding: '12px 15px' }}>TOTAL</td>
+                    <td style={{ padding: '12px 15px' }}>HTG {totalDepo.toLocaleString()}</td>
+                    <td style={{ padding: '12px 15px' }}>HTG {totalRetre.toLocaleString()}</td>
+                    <td style={{ padding: '12px 15px' }}>HTG {totalTransf.toLocaleString()}</td>
+                    <td style={{ padding: '12px 15px' }}>HTG {totalPre.toLocaleString()}</td>
+                    <td style={{ padding: '12px 15px' }}>{transactions.length}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -198,7 +241,7 @@ function Reports({ user }) {
           {/* LIS TRANZAKSYON */}
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', marginBottom: '25px' }}>
             <h2 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>
-              Lis Tranzaksyon {!isAdmin && '— ' + user?.branch}
+              📋 Lis Tranzaksyon {!isAdmin && '— ' + user?.branch}
             </h2>
             {transactions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>
@@ -231,14 +274,24 @@ function Reports({ user }) {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={{ background: '#f0f0f0', fontWeight: '800' }}>
-                    <td colSpan="3" style={{ padding: '12px 15px', color: '#1a5c2a' }}>TOTAL</td>
-                    <td style={{ padding: '12px 15px', color: '#1a5c2a' }}>HTG {transactions.reduce((s, t) => s + (t.montan || 0), 0).toLocaleString()}</td>
+                  <tr style={{ background: '#1a5c2a', color: 'white', fontWeight: '800' }}>
+                    <td colSpan="3" style={{ padding: '12px 15px' }}>TOTAL JENERAL</td>
+                    <td style={{ padding: '12px 15px' }}>HTG {transactions.reduce((s, t) => s + (t.montan || 0), 0).toLocaleString()}</td>
                     <td colSpan="4"></td>
                   </tr>
                 </tfoot>
               </table>
             )}
+          </div>
+
+          {/* SIYEN */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginTop: '40px' }}>
+            {['Prepare pa', 'Verifye pa', 'Apwouve pa'].map((label, i) => (
+              <div key={i} style={{ textAlign: 'center', borderTop: '2px solid #1a5c2a', paddingTop: '10px' }}>
+                <div style={{ fontSize: '13px', color: '#666', marginBottom: '30px' }}>{label}</div>
+                <div style={{ fontSize: '12px', color: '#999' }}>Siyati & Dat</div>
+              </div>
+            ))}
           </div>
         </>
       )}
