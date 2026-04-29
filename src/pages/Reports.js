@@ -233,7 +233,7 @@ function Reports({ user }) {
       {/* FOOTER */}
       <div style={{ textAlign: 'center', color: '#999', fontSize: '12px', marginTop: '20px' }}>
         <p>Dokiman sa jenere otomatikman pa sistèm GKP</p>
-        <p>Global Kes Pam — Tout dwa rezeve</p>
+        
       </div>
     </div>
   );

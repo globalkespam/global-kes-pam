@@ -146,7 +146,7 @@ function Login({ onLogin, users, currentLang, setCurrentLang, langFlags, t }) {
         </button>
 
         <div style={{ textAlign: 'center', marginTop: '20px', color: '#bbb', fontSize: '12px' }}>
-          GKP Banking System v3.0 — Tout dwa rezève
+          
         </div>
       </div>
     </div>
