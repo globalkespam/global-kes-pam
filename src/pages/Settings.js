@@ -62,15 +62,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
     }
   };
 
-  const addUser = async (newUser) => {
-    const { error } = await supabase.from('itilizate').insert([newUser]);
-    if (!error) {
-      fetchUsers();
-      showSuccess('Itilizatè ' + newUser.name + ' kreye!');
-    } else {
-      alert('Erè: ' + error.message);
-    }
-  };
+  
 
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
   const labelStyle = { display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px', color: '#555' };
