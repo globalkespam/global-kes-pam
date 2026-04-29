@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 
-function Clients({ user, kesyeOnly }) {
+function Clients({ user, kesyeOnly, freOuveti }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -15,7 +15,7 @@ function Clients({ user, kesyeOnly }) {
   const [form, setForm] = useState({
     nom: '', prenon: '', adres: '', phone: '', email: '',
     nif: '', dateNesans: '', deviz: 'HTG', seks: '',
-    depoInisyal: '', fre: '500', pin: '', branch: ''
+    depoInisyal: '', fre: String(freOuveti || 300), pin: '', branch: ''
   });
 
   const [formJoint, setFormJoint] = useState({
@@ -24,7 +24,6 @@ function Clients({ user, kesyeOnly }) {
     relasyon: '', pin: ''
   });
 
-  // CHAJE KLIYAN DEPI SUPABASE
   useEffect(() => {
     fetchClients();
   }, []);
@@ -35,20 +34,16 @@ function Clients({ user, kesyeOnly }) {
       .from('kliyan')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Erè:', error);
-    } else {
-      setClients(data || []);
-    }
+    if (error) console.error('Erè:', error);
+    else setClients(data || []);
     setLoading(false);
   };
 
   const generateNumKont = () => {
-  const num = String(clients.length + 1).padStart(6, '0');
-  return 'GKP-' + num;
-};
+    const num = String(clients.length + 1).padStart(6, '0');
+    return 'GKP-' + num;
+  };
 
-  // AJOUTE NOUVO KLIYAN
   const addClient = async () => {
     if (!form.nom || !form.prenon || !form.phone) return;
     const newClient = {
@@ -64,7 +59,7 @@ function Clients({ user, kesyeOnly }) {
       deviz: form.deviz,
       balance: parseFloat(form.depoInisyal) || 0,
       depo_inisyal: parseFloat(form.depoInisyal) || 0,
-      fre: parseFloat(form.fre) || 500,
+      fre: parseFloat(form.fre) || 300,
       pin: form.pin,
       branch: form.branch || user?.branch,
       status: 'Aktif',
@@ -76,14 +71,13 @@ function Clients({ user, kesyeOnly }) {
       alert('Erè: ' + error.message);
     } else {
       fetchClients();
-      setForm({ nom: '', prenon: '', adres: '', phone: '', email: '', nif: '', dateNesans: '', deviz: 'HTG', seks: '', depoInisyal: '', fre: '500', pin: '', branch: '' });
+      setForm({ nom: '', prenon: '', adres: '', phone: '', email: '', nif: '', dateNesans: '', deviz: 'HTG', seks: '', depoInisyal: '', fre: '300', pin: '', branch: '' });
       setFormJoint({ nom: '', prenon: '', phone: '', email: '', nif: '', dateNesans: '', seks: '', adres: '', relasyon: '', pin: '' });
       setIsJoint(false);
       setShowForm(false);
     }
   };
 
-  // BLOKE / DEBLOKE
   const toggleBloke = async (client) => {
     const newStatus = client.status === 'Aktif' ? 'Bloke' : 'Aktif';
     const { error } = await supabase
@@ -93,7 +87,6 @@ function Clients({ user, kesyeOnly }) {
     if (!error) fetchClients();
   };
 
-  // CHANJE PIN
   const changePin = async (clientId, newPin) => {
     const { error } = await supabase
       .from('kliyan')
@@ -131,9 +124,11 @@ function Clients({ user, kesyeOnly }) {
           <h1 style={{ margin: 0, color: '#1a5c2a', fontSize: '24px', fontWeight: '800' }}>Jesyon Kliyan</h1>
           <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>{clients.length} kliyan total</p>
         </div>
-        <button onClick={() => { setShowForm(!showForm); setIsJoint(false); }} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
-          Nouvo Kliyan
-        </button>
+        <button onClick={() => { setShowForm(!showForm); setIsJoint(false); }} style={{
+          background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)',
+          color: 'white', border: 'none', borderRadius: '10px',
+          padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700'
+        }}>Nouvo Kliyan</button>
       </div>
 
       {/* STATS */}
@@ -195,7 +190,17 @@ function Clients({ user, kesyeOnly }) {
               </select>
             </div>
             <div><label style={labelStyle}>Depo Inisyal</label><input type="number" value={form.depoInisyal} onChange={e => setForm({...form, depoInisyal: e.target.value})} placeholder="Montan..." style={inputStyle} /></div>
-            <div><label style={labelStyle}>Fre Ouvèti</label><input type="number" value={form.fre} onChange={e => setForm({...form, fre: e.target.value})} placeholder="500" style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>Fre Ouvèti</label>
+              <input
+                type="number"
+                value={form.fre}
+                onChange={e => isAdmin && setForm({...form, fre: e.target.value})}
+                readOnly={!isAdmin}
+                style={{ ...inputStyle, background: isAdmin ? 'white' : '#f5f5f5', color: isAdmin ? '#333' : '#999', cursor: isAdmin ? 'text' : 'not-allowed' }}
+              />
+              
+            </div>
             <div>
               <label style={labelStyle}>Branch</label>
               <select value={form.branch} onChange={e => setForm({...form, branch: e.target.value})} style={inputStyle}>
@@ -225,7 +230,8 @@ function Clients({ user, kesyeOnly }) {
                   <div><label style={labelStyle}>Non</label><input value={formJoint.nom} onChange={e => setFormJoint({...formJoint, nom: e.target.value})} placeholder="Non..." style={inputStyle} /></div>
                   <div><label style={labelStyle}>Prenon</label><input value={formJoint.prenon} onChange={e => setFormJoint({...formJoint, prenon: e.target.value})} placeholder="Prenon..." style={inputStyle} /></div>
                   <div><label style={labelStyle}>Telefon</label><input value={formJoint.phone} onChange={e => setFormJoint({...formJoint, phone: e.target.value})} placeholder="509-XXXX-XXXX" style={inputStyle} /></div>
-                  <div><label style={labelStyle}>Relasyon</label>
+                  <div>
+                    <label style={labelStyle}>Relasyon</label>
                     <select value={formJoint.relasyon} onChange={e => setFormJoint({...formJoint, relasyon: e.target.value})} style={inputStyle}>
                       <option value="">Chwazi...</option>
                       <option value="Mari/Madanm">Mari / Madanm</option>
@@ -317,6 +323,24 @@ function Clients({ user, kesyeOnly }) {
                 </button>
               )}
             </div>
+
+            {showDetail.kont_joint && (
+              <div>
+                <h4 style={{ color: '#3498db', margin: '0 0 10px' }}>👫 Titile 2 — Kont Joint</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {[
+                    { label: 'Non', value: showDetail.kont_joint.nom + ' ' + showDetail.kont_joint.prenon },
+                    { label: 'Telefon', value: showDetail.kont_joint.phone },
+                    { label: 'Relasyon', value: showDetail.kont_joint.relasyon },
+                  ].map((item, i) => (
+                    <div key={i} style={{ background: '#ebf5fb', borderRadius: '8px', padding: '10px' }}>
+                      <div style={{ fontSize: '11px', color: '#3498db', marginBottom: '3px' }}>{item.label}</div>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

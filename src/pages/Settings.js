@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 
-function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, setFreTransf }) {
+function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, setFreTransf, freOuveti, setFreOuveti }) {
   const [activeTab, setActiveTab] = useState('general');
-  const [freOuveti, setFreOuveti] = useState('300');
+  const [localFreOuveti, setLocalFreOuveti] = useState(String(freOuveti || 300));
   const [reserveKont, setReserveKont] = useState('500');
   const [freTransfEtenn, setFreTransfEtenn] = useState(String(freTransf?.enten || 50));
   const [freTransfBranch, setFreTransfBranch] = useState(String(freTransf?.branch || 150));
@@ -62,8 +62,6 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
     }
   };
 
-  
-
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
   const labelStyle = { display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px', color: '#555' };
 
@@ -103,7 +101,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Ouveti Kont</h3>
             <div style={{ marginBottom: '15px' }}>
               <label style={labelStyle}>Montan Fre (HTG)</label>
-              <select value={freOuveti} onChange={e => setFreOuveti(e.target.value)} style={inputStyle}>
+              <select value={localFreOuveti} onChange={e => setLocalFreOuveti(e.target.value)} style={inputStyle}>
                 <option value="250">HTG 250</option>
                 <option value="300">HTG 300</option>
                 <option value="350">HTG 350</option>
@@ -112,9 +110,12 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
               </select>
             </div>
             <div style={{ background: '#e8f5e9', borderRadius: '8px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#1a5c2a' }}>
-              Fre aktyel: <strong>HTG {parseFloat(freOuveti).toLocaleString()}</strong>
+              Fre aktyel: <strong>HTG {parseFloat(localFreOuveti).toLocaleString()}</strong>
             </div>
-            <button onClick={() => showSuccess('Fre ouveti mise a jou!')} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>Sove</button>
+            <button onClick={() => {
+              setFreOuveti(parseFloat(localFreOuveti));
+              showSuccess('Fre ouveti mise a jou — HTG ' + localFreOuveti + '!');
+            }} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>Sove</button>
           </div>
 
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
@@ -380,6 +381,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
               { label: 'Blokaj apre 3 tantativ', value: 'Aktive' },
               { label: 'Dire blokaj', value: '30 segond' },
               { label: 'Reserve obligatwa', value: 'HTG ' + reserveKont },
+              { label: 'Fre ouveti kont', value: 'HTG ' + localFreOuveti },
               { label: 'Fre transfe enten', value: 'HTG ' + freTransfEtenn },
               { label: 'Fre transfe branch', value: 'HTG ' + freTransfBranch },
               { label: 'PIN kliyan obligatwa', value: 'Wi' },
@@ -391,11 +393,11 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
             ))}
           </div>
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Jounal Aktivite</h3>
+            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Itilizate Aktif</h3>
             {users.slice(0, 5).map((u, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>Itilizate: {u.name}</div>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>{u.name}</div>
                   <div style={{ fontSize: '11px', color: '#999' }}>{u.role} — {u.branch}</div>
                 </div>
                 <span style={{ background: u.blocked ? '#fdf2f2' : '#e8f5e9', color: u.blocked ? '#e74c3c' : '#1a5c2a', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>

@@ -43,6 +43,7 @@ function App() {
   const [oreKes, setOreKes] = useState(initialOreKes);
   const [currentTime, setCurrentTime] = useState('');
   const [freTransf, setFreTransf] = useState({ enten: 50, branch: 150 });
+  const [freOuveti, setFreOuveti] = useState(300);
 
   const t = lang[currentLang];
 
@@ -151,8 +152,8 @@ function App() {
       />
       <main className="main-content">
         {currentPage === 'dashboard' && <Dashboard user={user} navigate={navigate} t={t} currentTime={currentTime} oreKes={oreKes} />}
-        {currentPage === 'clients' && user.role === 'Admin' && <Clients user={user} t={t} />}
-        {currentPage === 'clients' && user.role === 'Kesye' && <Clients user={user} t={t} kesyeOnly={true} />}
+        {currentPage === 'clients' && user.role === 'Admin' && <Clients user={user} t={t} freOuveti={freOuveti} />}
+        {currentPage === 'clients' && user.role === 'Kesye' && <Clients user={user} t={t} kesyeOnly={true} freOuveti={freOuveti} />}
         {currentPage === 'transactions' && <Transactions user={user} t={t} freTransf={freTransf} />}
         {currentPage === 'loans' && <Loans user={user} t={t} />}
         {currentPage === 'reports' && <Reports user={user} t={t} />}
@@ -170,10 +171,12 @@ function App() {
             setOreKes={setOreKes}
             freTransf={freTransf}
             setFreTransf={setFreTransf}
+            freOuveti={freOuveti}
+            setFreOuveti={setFreOuveti}
           />
         )}
         {currentPage === 'settings' && user.role !== 'Admin' && (
-          <KesyeInfo freTransf={freTransf} oreKes={oreKes} user={user} />
+          <KesyeInfo freTransf={freTransf} oreKes={oreKes} user={user} freOuveti={freOuveti} />
         )}
       </main>
     </div>
@@ -190,7 +193,7 @@ function AccessDenied() {
   );
 }
 
-function KesyeInfo({ freTransf, oreKes, user }) {
+function KesyeInfo({ freTransf, oreKes, user, freOuveti }) {
   const ore = oreKes[user?.branch] || { louvri: '07:00', femen: '20:00' };
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
@@ -199,7 +202,7 @@ function KesyeInfo({ freTransf, oreKes, user }) {
         <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
           <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre ak Chaj</h3>
           {[
-            { label: 'Fre Ouveti Kont', value: 'HTG 300', icon: '💳' },
+            { label: 'Fre Ouveti Kont', value: 'HTG ' + (freOuveti || 300), icon: '💳' },
             { label: 'Reserve Bloke pa Kont', value: 'HTG 500', icon: '🔒' },
             { label: 'Fre Transfe Enten', value: 'HTG ' + (freTransf?.enten || 50), icon: '🔄' },
             { label: 'Fre Transfe Branch-Branch', value: 'HTG ' + (freTransf?.branch || 150), icon: '🏦' },
