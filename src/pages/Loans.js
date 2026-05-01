@@ -71,12 +71,21 @@ function Loans({ user }) {
   const remboure = async () => {
     if (!showRemboure || !montanRemboure) return;
     const montan = parseFloat(montanRemboure);
-    const resteApeye = showRemboure.montan - montan;
 
+    // Kalkile enterè ak kapital
+    const peman = showRemboure.peman_chak_mwa || 0;
+    const enterè = montan > peman ? montan - peman : 0;
+    const kapital = montan - enterè;
+    const resteApeye = Math.max(0, showRemboure.montan - kapital);
     const newStatus = resteApeye <= 0 ? 'Peye' : 'Aktif';
-    await supabase.from('pre').update({ status: newStatus }).eq('id', showRemboure.id);
 
-    // Sove tranzaksyon rembourseman
+    // Mete ajou prè
+    await supabase.from('pre').update({
+      status: newStatus,
+      montan: resteApeye
+    }).eq('id', showRemboure.id);
+
+    // Sove tranzaksyon
     await supabase.from('tranzaksyon').insert([{
       type: 'Peman Pre',
       num_kont: showRemboure.num_kont,
@@ -86,12 +95,39 @@ function Loans({ user }) {
       branch: user?.branch,
       kesye: user?.name,
       ref: 'GKP-' + Date.now().toString().slice(-8),
+      benefis: enterè,
     }]);
+
+    // Sove enterè kòm BENEFIS
+    if (enterè > 0) {
+      await supabase.from('benefis').insert([{
+        type: 'Enterè Prè',
+        montan: enterè,
+        source: showRemboure.num_kont,
+        ref: 'GKP-ENT-' + Date.now().toString().slice(-8),
+        branch: user?.branch,
+        kesye: user?.name,
+        note: 'Enterè prè — ' + showRemboure.client,
+      }]);
+    }
+
+    // Sove penalite si genyen
+    if (showRemboure.penalite > 0 && newStatus === 'Peye') {
+      await supabase.from('benefis').insert([{
+        type: 'Penalite Prè',
+        montan: showRemboure.penalite,
+        source: showRemboure.num_kont,
+        ref: 'GKP-PEN-' + Date.now().toString().slice(-8),
+        branch: user?.branch,
+        kesye: user?.name,
+        note: 'Penalite prè — ' + showRemboure.client,
+      }]);
+    }
 
     fetchLoans();
     setShowRemboure(null);
     setMontanRemboure('');
-    alert('Rembourseman anrejistre!');
+    alert('✅ Rembourseman anrejistre!\nKapital: HTG ' + kapital.toFixed(2) + '\nEnterè: HTG ' + enterè.toFixed(2));
   };
 
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '13px' };

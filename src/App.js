@@ -14,18 +14,6 @@ import Team from './pages/Team';
 import Settings from './pages/Settings';
 import ExchangeRate from './pages/ExchangeRate';
 
-const initialBranches = [
-  { id: 1, nom: 'Branch Potoprens', adres: 'Delmas 33, Potoprens', telefon: '509-2222-3333', responsab: 'Marie Kesye', status: 'Aktif' },
-  { id: 2, nom: 'Branch Kapo', adres: 'Kapo Vil, No', telefon: '509-4444-5555', responsab: 'jude', status: 'Aktif' },
-  { id: 3, nom: 'Siege Central', adres: 'Potoprens, HT', telefon: '509-1111-2222', responsab: 'Administrateur', status: 'Aktif' },
-];
-
-const initialOreKes = {
-  'Branch Potoprens': { louvri: '07:00', femen: '20:00', aktif: true, jou: [true,true,true,true,true,true,true] },
-  'Branch Kapo': { louvri: '07:00', femen: '20:00', aktif: true, jou: [true,true,true,true,true,true,true] },
-  'Siege Central': { louvri: '07:00', femen: '20:00', aktif: true, jou: [true,true,true,true,true,true,true] },
-};
-
 const langFlags = {
   ht: 'Kreyol',
   fr: 'Francais',
@@ -39,11 +27,19 @@ function App() {
   const [user, setUser] = useState(null);
   const [currentLang, setCurrentLang] = useState('ht');
   const [users, setUsers] = useState([]);
-  const [branches, setBranches] = useState(initialBranches);
-  const [oreKes, setOreKes] = useState(initialOreKes);
+  const [branches, setBranches] = useState([]);
+  const [oreKes, setOreKes] = useState({});
   const [currentTime, setCurrentTime] = useState('');
-  const [freTransf, setFreTransf] = useState({ enten: 50, branch: 150 });
-  const [freOuveti, setFreOuveti] = useState(300);
+  const [parametres, setParametres] = useState({
+    fre_ouveti_HTG: 300,
+    fre_ouveti_USD: 5,
+    fre_ouveti_DOP: 150,
+    fre_ouveti_EUR: 10,
+    fre_ouveti_CAD: 8,
+    fre_transf_enten: 50,
+    fre_transf_branch: 150,
+    reserve_kont: 500,
+  });
 
   const t = lang[currentLang];
 
@@ -61,11 +57,52 @@ function App() {
 
   useEffect(() => {
     fetchUsers();
+    fetchBranches();
+    fetchParametres();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchUsers = async () => {
     const { data } = await supabase.from('itilizate').select('*');
     setUsers(data || []);
+  };
+
+  const fetchBranches = async () => {
+    const { data } = await supabase.from('branches').select('*').order('id');
+    if (data) {
+      setBranches(data);
+      const ore = {};
+      data.forEach(b => {
+        ore[b.nom] = {
+          louvri: b.louvri || '07:00',
+          femen: b.femen || '20:00',
+          aktif: b.aktif !== false,
+          jou: b.jou || [true,true,true,true,true,true,true],
+        };
+      });
+      setOreKes(ore);
+    }
+  };
+
+  const fetchParametres = async () => {
+    const { data } = await supabase.from('parametres').select('*');
+    if (data) {
+      const params = {};
+      data.forEach(p => {
+        params[p.cle] = parseFloat(p.valeur) || p.valeur;
+      });
+      setParametres(prev => ({ ...prev, ...params }));
+    }
+  };
+
+  const saveParametre = async (cle, valeur) => {
+    await supabase.from('parametres').upsert({ cle, valeur: String(valeur), updated_at: new Date() }, { onConflict: 'cle' });
+    fetchParametres();
+  };
+
+  const saveBranch = async (branch) => {
+    await supabase.from('branches').upsert(branch, { onConflict: 'id' });
+    fetchBranches();
   };
 
   const isBranchOpen = (branchName) => {
@@ -152,12 +189,12 @@ function App() {
       />
       <main className="main-content">
         {currentPage === 'dashboard' && <Dashboard user={user} navigate={navigate} t={t} currentTime={currentTime} oreKes={oreKes} />}
-        {currentPage === 'clients' && user.role === 'Admin' && <Clients user={user} t={t} freOuveti={freOuveti} />}
-        {currentPage === 'clients' && user.role === 'Kesye' && <Clients user={user} t={t} kesyeOnly={true} freOuveti={freOuveti} />}
-        {currentPage === 'transactions' && <Transactions user={user} t={t} freTransf={freTransf} />}
+        {currentPage === 'clients' && user.role === 'Admin' && <Clients user={user} t={t} parametres={parametres} branches={branches} />}
+        {currentPage === 'clients' && user.role === 'Kesye' && <Clients user={user} t={t} kesyeOnly={true} parametres={parametres} branches={branches} />}
+        {currentPage === 'transactions' && <Transactions user={user} t={t} parametres={parametres} />}
         {currentPage === 'loans' && <Loans user={user} t={t} />}
-        {currentPage === 'reports' && <Reports user={user} t={t} />}
-        {currentPage === 'team' && user.role === 'Admin' && <Team user={user} t={t} />}
+        {currentPage === 'reports' && <Reports user={user} t={t} branches={branches} />}
+        {currentPage === 'team' && user.role === 'Admin' && <Team user={user} t={t} branches={branches} />}
         {currentPage === 'team' && user.role !== 'Admin' && <AccessDenied />}
         {currentPage === 'exchange' && <ExchangeRate user={user} />}
         {currentPage === 'settings' && user.role === 'Admin' && (
@@ -169,14 +206,14 @@ function App() {
             setBranches={setBranches}
             oreKes={oreKes}
             setOreKes={setOreKes}
-            freTransf={freTransf}
-            setFreTransf={setFreTransf}
-            freOuveti={freOuveti}
-            setFreOuveti={setFreOuveti}
+            parametres={parametres}
+            saveParametre={saveParametre}
+            saveBranch={saveBranch}
+            fetchBranches={fetchBranches}
           />
         )}
         {currentPage === 'settings' && user.role !== 'Admin' && (
-          <KesyeInfo freTransf={freTransf} oreKes={oreKes} user={user} freOuveti={freOuveti} />
+          <KesyeInfo parametres={parametres} oreKes={oreKes} user={user} />
         )}
       </main>
     </div>
@@ -193,21 +230,22 @@ function AccessDenied() {
   );
 }
 
-function KesyeInfo({ freTransf, oreKes, user, freOuveti }) {
+function KesyeInfo({ parametres, oreKes, user }) {
   const ore = oreKes[user?.branch] || { louvri: '07:00', femen: '20:00' };
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
       <h1 style={{ margin: '0 0 25px', color: '#1a5c2a', fontSize: '24px', fontWeight: '800' }}>Enfòmasyon Sistèm</h1>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre ak Chaj</h3>
+          <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Ouveti pa Deviz</h3>
           {[
-            { label: 'Fre Ouveti Kont', value: 'HTG ' + (freOuveti || 300), icon: '💳' },
-            { label: 'Reserve Bloke pa Kont', value: 'HTG 500', icon: '🔒' },
-            { label: 'Fre Transfe Enten', value: 'HTG ' + (freTransf?.enten || 50), icon: '🔄' },
-            { label: 'Fre Transfe Branch-Branch', value: 'HTG ' + (freTransf?.branch || 150), icon: '🏦' },
+            { label: 'HTG - Goud', value: 'HTG ' + (parametres.fre_ouveti_HTG || 300), icon: '🇭🇹' },
+            { label: 'USD - Dola', value: 'USD ' + (parametres.fre_ouveti_USD || 5), icon: '🇺🇸' },
+            { label: 'DOP - Peso', value: 'DOP ' + (parametres.fre_ouveti_DOP || 150), icon: '🇩🇴' },
+            { label: 'EUR - Euro', value: 'EUR ' + (parametres.fre_ouveti_EUR || 10), icon: '🇪🇺' },
+            { label: 'CAD - Kanadyen', value: 'CAD ' + (parametres.fre_ouveti_CAD || 8), icon: '🇨🇦' },
           ].map((item, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '18px' }}>{item.icon}</span>
                 <span style={{ color: '#555', fontSize: '14px' }}>{item.label}</span>
@@ -219,11 +257,13 @@ function KesyeInfo({ freTransf, oreKes, user, freOuveti }) {
         <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
           <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Ore Travay — {user?.branch}</h3>
           {[
-            { label: 'Jou Travay', value: 'Lendi — Dimanch', icon: '📅' },
             { label: 'Louveti', value: ore.louvri, icon: '🌅' },
             { label: 'Femti', value: ore.femen, icon: '🌙' },
+            { label: 'Fre Transfe Enten', value: 'HTG ' + (parametres.fre_transf_enten || 50), icon: '🔄' },
+            { label: 'Fre Transfe Branch', value: 'HTG ' + (parametres.fre_transf_branch || 150), icon: '🏦' },
+            { label: 'Reserve Bloke', value: 'HTG ' + (parametres.reserve_kont || 500), icon: '🔒' },
           ].map((item, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '18px' }}>{item.icon}</span>
                 <span style={{ color: '#555', fontSize: '14px' }}>{item.label}</span>

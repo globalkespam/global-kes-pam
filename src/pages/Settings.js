@@ -1,18 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 
-function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, setFreTransf, freOuveti, setFreOuveti }) {
+function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, saveParametre, saveBranch, fetchBranches }) {
   const [activeTab, setActiveTab] = useState('general');
-  const [localFreOuveti, setLocalFreOuveti] = useState(String(freOuveti || 300));
-  const [reserveKont, setReserveKont] = useState('500');
-  const [freTransfEtenn, setFreTransfEtenn] = useState(String(freTransf?.enten || 50));
-  const [freTransfBranch, setFreTransfBranch] = useState(String(freTransf?.branch || 150));
   const [successMsg, setSuccessMsg] = useState('');
-  const [newBranch, setNewBranch] = useState({ nom: '', adres: '', telefon: '', responsab: '' });
-  const [showBranchForm, setShowBranchForm] = useState(false);
-  const [showPassIndex, setShowPassIndex] = useState(null);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showPassIndex, setShowPassIndex] = useState(null);
+  const [showBranchForm, setShowBranchForm] = useState(false);
+  const [newBranch, setNewBranch] = useState({ nom: '', adres: '', telefon: '', responsab: '' });
+
+  const [localParams, setLocalParams] = useState({
+    fre_ouveti_HTG: parametres.fre_ouveti_HTG || 300,
+    fre_ouveti_USD: parametres.fre_ouveti_USD || 5,
+    fre_ouveti_DOP: parametres.fre_ouveti_DOP || 150,
+    fre_ouveti_EUR: parametres.fre_ouveti_EUR || 10,
+    fre_ouveti_CAD: parametres.fre_ouveti_CAD || 8,
+    fre_transf_enten: parametres.fre_transf_enten || 50,
+    fre_transf_branch: parametres.fre_transf_branch || 150,
+    reserve_kont: parametres.reserve_kont || 500,
+  });
+
+  useEffect(() => {
+    setLocalParams({
+      fre_ouveti_HTG: parametres.fre_ouveti_HTG || 300,
+      fre_ouveti_USD: parametres.fre_ouveti_USD || 5,
+      fre_ouveti_DOP: parametres.fre_ouveti_DOP || 150,
+      fre_ouveti_EUR: parametres.fre_ouveti_EUR || 10,
+      fre_ouveti_CAD: parametres.fre_ouveti_CAD || 8,
+      fre_transf_enten: parametres.fre_transf_enten || 50,
+      fre_transf_branch: parametres.fre_transf_branch || 150,
+      reserve_kont: parametres.reserve_kont || 500,
+    });
+  }, [parametres]);
 
   useEffect(() => {
     fetchUsers();
@@ -30,36 +50,78 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
-  const toggleBloke = async (u) => {
-    const { error } = await supabase
-      .from('itilizate')
-      .update({ blocked: !u.blocked })
-      .eq('id', u.id);
-    if (!error) {
-      fetchUsers();
-      showSuccess(u.blocked ? u.name + ' debloke!' : u.name + ' bloke!');
+  const saveAllParams = async () => {
+    for (const [cle, valeur] of Object.entries(localParams)) {
+      await saveParametre(cle, valeur);
     }
+    showSuccess('Tout paramèt sove nan Supabase!');
+  };
+
+  const toggleBloke = async (u) => {
+    await supabase.from('itilizate').update({ blocked: !u.blocked }).eq('id', u.id);
+    fetchUsers();
+    showSuccess(u.blocked ? u.name + ' debloke!' : u.name + ' bloke!');
   };
 
   const deleteUser = async (u) => {
     if (!window.confirm('Ou vle efase ' + u.name + '?')) return;
-    const { error } = await supabase.from('itilizate').delete().eq('id', u.id);
-    if (!error) {
-      fetchUsers();
-      showSuccess(u.name + ' efase!');
-    }
+    await supabase.from('itilizate').delete().eq('id', u.id);
+    fetchUsers();
+    showSuccess(u.name + ' efase!');
   };
 
   const changePassword = async (u, newPass) => {
     if (!newPass || newPass.length < 4) return;
-    const { error } = await supabase
-      .from('itilizate')
-      .update({ password: newPass })
-      .eq('id', u.id);
-    if (!error) {
-      fetchUsers();
-      showSuccess('Modpas ' + u.name + ' chanje!');
-    }
+    await supabase.from('itilizate').update({ password: newPass }).eq('id', u.id);
+    fetchUsers();
+    showSuccess('Modpas ' + u.name + ' chanje!');
+  };
+
+  const saveOreKes = async (branchNom, ore) => {
+    const branch = branches.find(b => b.nom === branchNom);
+    if (!branch) return;
+    await saveBranch({
+      id: branch.id,
+      nom: branch.nom,
+      adres: branch.adres,
+      telefon: branch.telefon,
+      responsab: branch.responsab,
+      status: branch.status,
+      louvri: ore.louvri,
+      femen: ore.femen,
+      aktif: ore.aktif,
+      jou: ore.jou,
+    });
+    showSuccess('Ore ' + branchNom + ' sove nan Supabase!');
+  };
+
+  const addBranch = async () => {
+    if (!newBranch.nom) return;
+    await supabase.from('branches').insert([{
+      ...newBranch,
+      status: 'Aktif',
+      louvri: '07:00',
+      femen: '20:00',
+      aktif: true,
+      jou: [true,true,true,true,true,true,true],
+    }]);
+    fetchBranches();
+    setNewBranch({ nom: '', adres: '', telefon: '', responsab: '' });
+    setShowBranchForm(false);
+    showSuccess('Branch ' + newBranch.nom + ' kreye!');
+  };
+
+  const deleteBranch = async (branch) => {
+    if (!window.confirm('Efase branch ' + branch.nom + '?')) return;
+    await supabase.from('branches').delete().eq('id', branch.id);
+    fetchBranches();
+    showSuccess('Branch ' + branch.nom + ' efase!');
+  };
+
+  const toggleBranchStatus = async (branch) => {
+    const newStatus = branch.status === 'Aktif' ? 'Inaktif' : 'Aktif';
+    await saveBranch({ ...branch, status: newStatus });
+    showSuccess('Branch ' + branch.nom + ' mise a jou!');
   };
 
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
@@ -97,77 +159,64 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
       {/* JENERAL */}
       {activeTab === 'general' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Ouveti Kont</h3>
-            <div style={{ marginBottom: '15px' }}>
-              <label style={labelStyle}>Montan Fre (HTG)</label>
-              <select value={localFreOuveti} onChange={e => setLocalFreOuveti(e.target.value)} style={inputStyle}>
-                <option value="250">HTG 250</option>
-                <option value="300">HTG 300</option>
-                <option value="350">HTG 350</option>
-                <option value="500">HTG 500</option>
-                <option value="1000">HTG 1,000</option>
-              </select>
+
+          {/* FRE OUVETI PA DEVIZ */}
+          <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', gridColumn: '1 / -1' }}>
+            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Ouveti Kont pa Deviz</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', marginBottom: '20px' }}>
+              {[
+                { key: 'fre_ouveti_HTG', label: '🇭🇹 HTG', placeholder: '300' },
+                { key: 'fre_ouveti_USD', label: '🇺🇸 USD', placeholder: '5' },
+                { key: 'fre_ouveti_DOP', label: '🇩🇴 DOP', placeholder: '150' },
+                { key: 'fre_ouveti_EUR', label: '🇪🇺 EUR', placeholder: '10' },
+                { key: 'fre_ouveti_CAD', label: '🇨🇦 CAD', placeholder: '8' },
+              ].map((item, i) => (
+                <div key={i}>
+                  <label style={labelStyle}>{item.label}</label>
+                  <input
+                    type="number"
+                    value={localParams[item.key]}
+                    onChange={e => setLocalParams({ ...localParams, [item.key]: parseFloat(e.target.value) || 0 })}
+                    placeholder={item.placeholder}
+                    style={inputStyle}
+                  />
+                </div>
+              ))}
             </div>
-            <div style={{ background: '#e8f5e9', borderRadius: '8px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#1a5c2a' }}>
-              Fre aktyel: <strong>HTG {parseFloat(localFreOuveti).toLocaleString()}</strong>
-            </div>
-            <button onClick={() => {
-              setFreOuveti(parseFloat(localFreOuveti));
-              showSuccess('Fre ouveti mise a jou — HTG ' + localFreOuveti + '!');
-            }} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>Sove</button>
+            <button onClick={saveAllParams} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 25px', cursor: 'pointer', fontWeight: '700' }}>
+              💾 Sove Tout Fre yo
+            </button>
           </div>
 
-          <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Reserve Obligatwa pa Kont</h3>
-            <div style={{ marginBottom: '15px' }}>
-              <label style={labelStyle}>Montan Bloke Otomatik (HTG)</label>
-              <select value={reserveKont} onChange={e => setReserveKont(e.target.value)} style={inputStyle}>
-                <option value="500">HTG 500</option>
-                <option value="1000">HTG 1,000</option>
-                <option value="1500">HTG 1,500</option>
-                <option value="2000">HTG 2,000</option>
-              </select>
-            </div>
-            <div style={{ background: '#fff3e0', borderRadius: '8px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#e67e22' }}>
-              HTG {parseFloat(reserveKont).toLocaleString()} bloke otomatik sou chak kont
-            </div>
-            <button onClick={() => showSuccess('Reserve obligatwa mise a jou!')} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>Sove</button>
-          </div>
-
+          {/* FRE TRANSFE */}
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Transfe</h3>
             <div style={{ marginBottom: '15px' }}>
               <label style={labelStyle}>Fre Transfe Enten (HTG)</label>
-              <input type="number" value={freTransfEtenn} onChange={e => setFreTransfEtenn(e.target.value)} style={inputStyle} />
+              <input type="number" value={localParams.fre_transf_enten} onChange={e => setLocalParams({ ...localParams, fre_transf_enten: parseFloat(e.target.value) || 0 })} style={inputStyle} />
             </div>
             <div style={{ marginBottom: '15px' }}>
               <label style={labelStyle}>Fre Transfe Branch-Branch (HTG)</label>
-              <input type="number" value={freTransfBranch} onChange={e => setFreTransfBranch(e.target.value)} style={inputStyle} />
+              <input type="number" value={localParams.fre_transf_branch} onChange={e => setLocalParams({ ...localParams, fre_transf_branch: parseFloat(e.target.value) || 0 })} style={inputStyle} />
             </div>
-            <div style={{ background: '#e8f5e9', borderRadius: '8px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#1a5c2a' }}>
-              Enten: HTG {freTransfEtenn} | Branch-Branch: HTG {freTransfBranch}
-            </div>
-            <button onClick={() => {
-              setFreTransf({ enten: parseFloat(freTransfEtenn), branch: parseFloat(freTransfBranch) });
-              showSuccess('Fre transfe mise a jou!');
-            }} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>Sove</button>
+            <button onClick={saveAllParams} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>
+              💾 Sove
+            </button>
           </div>
 
+          {/* RESERVE */}
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Enfòmasyon Sistèm</h3>
-            {[
-              { label: 'Non Sistèm', value: 'Global Kes Pam' },
-              { label: 'Vesyon', value: 'GKP v3.0' },
-              { label: 'Deviz Prensipal', value: 'HTG' },
-              { label: 'Branch Aktif', value: branches.length },
-              { label: 'Dat Jounen', value: new Date().toLocaleDateString('fr-HT') },
-            ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0', fontSize: '14px' }}>
-                <span style={{ color: '#666' }}>{item.label}</span>
-                <span style={{ fontWeight: '700', color: '#333' }}>{item.value}</span>
-              </div>
-            ))}
+            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Reserve Obligatwa pa Kont</h3>
+            <div style={{ marginBottom: '15px' }}>
+              <label style={labelStyle}>Montan Bloke (HTG)</label>
+              <input type="number" value={localParams.reserve_kont} onChange={e => setLocalParams({ ...localParams, reserve_kont: parseFloat(e.target.value) || 0 })} style={inputStyle} />
+            </div>
+            <div style={{ background: '#fff3e0', borderRadius: '8px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#e67e22' }}>
+              ⚠️ HTG {localParams.reserve_kont} bloke — kliyan pa ka retire li
+            </div>
+            <button onClick={saveAllParams} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>
+              💾 Sove
+            </button>
           </div>
         </div>
       )}
@@ -177,7 +226,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
         <div>
           <div style={{ background: '#e8f5e9', borderRadius: '12px', padding: '15px', marginBottom: '20px', border: '2px solid #1a5c2a' }}>
             <p style={{ margin: 0, color: '#1a5c2a', fontWeight: '600', fontSize: '14px' }}>
-              Fikse le louveti ak femti pou chak branch. Kesye yo pa ka konekte andeyò ore sa yo.
+              ✅ Chanjman yo ap sove dirèkteman nan Supabase — yo ap rete menm apre ou femen app la!
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
@@ -190,8 +239,9 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '12px', color: '#666' }}>{ore.aktif ? 'Aktif' : 'Dezaktive'}</span>
                       <div onClick={() => {
-                        setOreKes({ ...oreKes, [branch.nom]: { ...ore, aktif: !ore.aktif } });
-                        showSuccess('Ore ' + branch.nom + ' mise a jou!');
+                        const newOre = { ...ore, aktif: !ore.aktif };
+                        setOreKes({ ...oreKes, [branch.nom]: newOre });
+                        saveOreKes(branch.nom, newOre);
                       }} style={{ width: '44px', height: '24px', background: ore.aktif ? '#1a5c2a' : '#ccc', borderRadius: '12px', cursor: 'pointer', position: 'relative' }}>
                         <div style={{ position: 'absolute', top: '2px', left: ore.aktif ? '22px' : '2px', width: '20px', height: '20px', background: 'white', borderRadius: '50%', transition: 'left 0.3s' }} />
                       </div>
@@ -224,8 +274,8 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
                       })}
                     </div>
                   </div>
-                  <button onClick={() => showSuccess('Ore ' + branch.nom + ' sove!')} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700', width: '100%' }}>
-                    Sove Ore
+                  <button onClick={() => saveOreKes(branch.nom, ore)} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700', width: '100%' }}>
+                    💾 Sove Ore nan Supabase
                   </button>
                 </div>
               );
@@ -267,16 +317,10 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
                         <input
                           type={showPassIndex === i ? 'text' : 'password'}
                           defaultValue={u.password}
-                          onBlur={e => {
-                            const newPass = e.target.value;
-                            if (newPass && newPass !== u.password) {
-                              changePassword(u, newPass);
-                            }
-                          }}
+                          onBlur={e => { if (e.target.value !== u.password) changePassword(u, e.target.value); }}
                           style={{ padding: '6px 30px 6px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', width: '120px' }}
                         />
-                        <button onClick={() => setShowPassIndex(showPassIndex === i ? null : i)}
-                          style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: 0 }}>
+                        <button onClick={() => setShowPassIndex(showPassIndex === i ? null : i)} style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: 0 }}>
                           {showPassIndex === i ? '🙈' : '👁️'}
                         </button>
                       </div>
@@ -322,19 +366,8 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
                 <div><label style={labelStyle}>Responsab</label><input value={newBranch.responsab} onChange={e => setNewBranch({...newBranch, responsab: e.target.value})} placeholder="Non responsab..." style={inputStyle} /></div>
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => {
-                  if (!newBranch.nom) return;
-                  setBranches([...branches, { ...newBranch, id: branches.length + 1, status: 'Aktif' }]);
-                  setOreKes({ ...oreKes, [newBranch.nom]: { louvri: '07:00', femen: '20:00', aktif: true, jou: [true,true,true,true,true,true,true] } });
-                  setNewBranch({ nom: '', adres: '', telefon: '', responsab: '' });
-                  setShowBranchForm(false);
-                  showSuccess('Branch ' + newBranch.nom + ' kreye!');
-                }} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>
-                  Kreye Branch
-                </button>
-                <button onClick={() => setShowBranchForm(false)} style={{ background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>
-                  Anile
-                </button>
+                <button onClick={addBranch} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>Kreye Branch</button>
+                <button onClick={() => setShowBranchForm(false)} style={{ background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>Anile</button>
               </div>
             </div>
           )}
@@ -345,24 +378,16 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
                   <h4 style={{ margin: 0, color: '#1a5c2a', fontSize: '15px' }}>🏦 {branch.nom}</h4>
                   <span style={{ background: branch.status === 'Aktif' ? '#e8f5e9' : '#fdf2f2', color: branch.status === 'Aktif' ? '#1a5c2a' : '#e74c3c', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>{branch.status}</span>
                 </div>
-                <div style={{ fontSize: '13px', color: '#666', display: 'grid', gap: '5px' }}>
+                <div style={{ fontSize: '13px', color: '#666', display: 'grid', gap: '5px', marginBottom: '12px' }}>
                   <div>📍 {branch.adres}</div>
                   <div>📞 {branch.telefon}</div>
                   <div>👤 {branch.responsab}</div>
                 </div>
-                <div style={{ marginTop: '12px', display: 'flex', gap: '5px' }}>
-                  <button onClick={() => {
-                    setBranches(branches.map((b, idx) => idx === i ? { ...b, status: b.status === 'Aktif' ? 'Inaktif' : 'Aktif' } : b));
-                    showSuccess('Branch ' + branch.nom + ' mise a jou!');
-                  }} style={{ flex: 1, padding: '8px', background: branch.status === 'Aktif' ? '#e74c3c' : '#2ecc71', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <button onClick={() => toggleBranchStatus(branch)} style={{ flex: 1, padding: '8px', background: branch.status === 'Aktif' ? '#e74c3c' : '#2ecc71', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
                     {branch.status === 'Aktif' ? 'Dezaktive' : 'Aktive'}
                   </button>
-                  <button onClick={() => {
-                    if (window.confirm('Efase branch ' + branch.nom + '?')) {
-                      setBranches(branches.filter((_, idx) => idx !== i));
-                      showSuccess('Branch ' + branch.nom + ' efase!');
-                    }
-                  }} style={{ padding: '8px 12px', background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
+                  <button onClick={() => deleteBranch(branch)} style={{ padding: '8px 12px', background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
                     Efase
                   </button>
                 </div>
@@ -378,12 +403,11 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Regl Sekirite</h3>
             {[
-              { label: 'Blokaj apre 3 tantativ', value: 'Aktive' },
-              { label: 'Dire blokaj', value: '30 segond' },
-              { label: 'Reserve obligatwa', value: 'HTG ' + reserveKont },
-              { label: 'Fre ouveti kont', value: 'HTG ' + localFreOuveti },
-              { label: 'Fre transfe enten', value: 'HTG ' + freTransfEtenn },
-              { label: 'Fre transfe branch', value: 'HTG ' + freTransfBranch },
+              { label: 'Reserve obligatwa', value: 'HTG ' + localParams.reserve_kont },
+              { label: 'Fre ouveti HTG', value: 'HTG ' + localParams.fre_ouveti_HTG },
+              { label: 'Fre ouveti USD', value: 'USD ' + localParams.fre_ouveti_USD },
+              { label: 'Fre transfe enten', value: 'HTG ' + localParams.fre_transf_enten },
+              { label: 'Fre transfe branch', value: 'HTG ' + localParams.fre_transf_branch },
               { label: 'PIN kliyan obligatwa', value: 'Wi' },
             ].map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #f0f0f0', fontSize: '14px' }}>
@@ -394,7 +418,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, freTransf, s
           </div>
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Itilizate Aktif</h3>
-            {users.slice(0, 5).map((u, i) => (
+            {users.map((u, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
                 <div>
                   <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>{u.name}</div>

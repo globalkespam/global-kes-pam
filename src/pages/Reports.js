@@ -2,41 +2,55 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import logo from '../assets/logo.jpeg.jpeg';
 
-function Reports({ user }) {
-  const today = new Date().toISOString().split('T')[0];
+function Reports({ user, branches }) {
+  const now = new Date();
+  const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
   const isAdmin = user?.role === 'Admin';
 
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
   const [selectedBranch, setSelectedBranch] = useState(isAdmin ? 'Tout Branch' : user?.branch);
   const [transactions, setTransactions] = useState([]);
+  const [benefisData, setBenefisData] = useState([]);
+  const [kliyanData, setKliyanData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const branches = ['Tout Branch', 'Branch Potoprens', 'Branch Kapo', 'Siege Central'];
+  const branchOptions = ['Tout Branch', ...(branches && branches.length > 0 ? branches.map(b => b.nom) : [])];
+  const branchList = branches && branches.length > 0 ? branches.map(b => b.nom) : [];
 
   useEffect(() => {
-    fetchTransactions();
+    fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, selectedBranch]);
 
-  const fetchTransactions = async () => {
+  const fetchAll = async () => {
     setLoading(true);
-    let query = supabase
-      .from('tranzaksyon')
-      .select('*')
-      .order('created_at', { ascending: false });
+
+    let query = supabase.from('tranzaksyon').select('*').order('created_at', { ascending: false });
 
     if (isAdmin) {
       query = query.gte('created_at', dateFrom).lte('created_at', dateTo + 'T23:59:59');
-      if (selectedBranch !== 'Tout Branch') {
-        query = query.eq('branch', selectedBranch);
-      }
+      if (selectedBranch !== 'Tout Branch') query = query.eq('branch', selectedBranch);
     } else {
       query = query.eq('branch', user?.branch).gte('created_at', today).lte('created_at', today + 'T23:59:59');
     }
 
-    const { data, error } = await query;
-    if (!error) setTransactions(data || []);
+    const { data: transData } = await query;
+    setTransactions(transData || []);
+
+    let benefisQuery = supabase.from('benefis').select('*').order('created_at', { ascending: false });
+    if (isAdmin) {
+      benefisQuery = benefisQuery.gte('created_at', dateFrom).lte('created_at', dateTo + 'T23:59:59');
+      if (selectedBranch !== 'Tout Branch') benefisQuery = benefisQuery.eq('branch', selectedBranch);
+    } else {
+      benefisQuery = benefisQuery.eq('branch', user?.branch).gte('created_at', today).lte('created_at', today + 'T23:59:59');
+    }
+    const { data: benData } = await benefisQuery;
+    setBenefisData(benData || []);
+
+    const { data: kliData } = await supabase.from('kliyan').select('reserve, balance, branch, nom, prenon');
+    setKliyanData(kliData || []);
+
     setLoading(false);
   };
 
@@ -44,15 +58,21 @@ function Reports({ user }) {
   const totalRetre = transactions.filter(t => t.type === 'Retre').reduce((s, t) => s + (t.montan || 0), 0);
   const totalTransf = transactions.filter(t => t.type === 'Transfere').reduce((s, t) => s + (t.montan || 0), 0);
   const totalPre = transactions.filter(t => t.type === 'Peman Pre').reduce((s, t) => s + (t.montan || 0), 0);
-  const totalNet = totalDepo - totalRetre;
 
-  const branchList = ['Branch Potoprens', 'Branch Kapo', 'Siege Central'];
+  const totalFreOuveti = benefisData.filter(b => b.type === 'Fre Ouveti Kont').reduce((s, b) => s + (b.montan || 0), 0);
+  const totalEntere = benefisData.filter(b => b.type === 'Enterè Prè').reduce((s, b) => s + (b.montan || 0), 0);
+  const totalPenalite = benefisData.filter(b => b.type === 'Penalite Prè').reduce((s, b) => s + (b.montan || 0), 0);
+  const totalBenefis = totalFreOuveti + totalEntere + totalPenalite;
+
+  const kobBloke = kliyanData.reduce((s, k) => s + (k.reserve || 500), 0);
+
   const branchStats = branchList.map(b => ({
     name: b,
     depo: transactions.filter(t => t.branch === b && t.type === 'Depo').reduce((s, t) => s + (t.montan || 0), 0),
     retre: transactions.filter(t => t.branch === b && t.type === 'Retre').reduce((s, t) => s + (t.montan || 0), 0),
     transf: transactions.filter(t => t.branch === b && t.type === 'Transfere').reduce((s, t) => s + (t.montan || 0), 0),
     pre: transactions.filter(t => t.branch === b && t.type === 'Peman Pre').reduce((s, t) => s + (t.montan || 0), 0),
+    benefis: benefisData.filter(b2 => b2.branch === b).reduce((s, b2) => s + (b2.montan || 0), 0),
     count: transactions.filter(t => t.branch === b).length,
   }));
 
@@ -60,36 +80,16 @@ function Reports({ user }) {
     if (type === 'Depo') return '#2ecc71';
     if (type === 'Retre') return '#e74c3c';
     if (type === 'Transfere') return '#3498db';
+    if (type === 'Fre Ouveti') return '#9b59b6';
     return '#f39c12';
   };
 
-  const formatDate = (d) => {
-    if (!d) return '';
-    return new Date(d).toLocaleDateString('fr-HT');
-  };
-
-  const formatTime = (d) => {
-    if (!d) return '';
-    return new Date(d).toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
+  const formatDate = (d) => { if (!d) return ''; return new Date(d + 'T12:00:00').toLocaleDateString('fr-HT'); };
+  const formatTime = (d) => { if (!d) return ''; return new Date(d).toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' }); };
 
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          .print-only { display: block !important; }
-          body { background: white !important; }
-          @page { size: A4; margin: 15mm; }
-          table { page-break-inside: auto; }
-          tr { page-break-inside: avoid; }
-        }
-        .print-only { display: none; }
-      `}</style>
+      <style>{`@media print { .no-print { display: none !important; } @page { size: A4; margin: 15mm; } }`}</style>
 
       {/* HEADER */}
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
@@ -99,12 +99,7 @@ function Reports({ user }) {
             {isAdmin ? 'Rapo detaye pa dat ak branch' : 'Rapo jounen — ' + user?.branch}
           </p>
         </div>
-        <button onClick={handlePrint} style={{
-          background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)',
-          color: 'white', border: 'none', borderRadius: '10px',
-          padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700',
-          display: 'flex', alignItems: 'center', gap: '8px'
-        }}>
+        <button onClick={() => window.print()} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
           🖨️ Enprime Rapo
         </button>
       </div>
@@ -116,100 +111,110 @@ function Reports({ user }) {
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>De Dat</label>
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
             </div>
             <div style={{ fontSize: '20px', fontWeight: '800', color: '#1a5c2a', paddingBottom: '8px' }}>→</div>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>Jiska Dat</label>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>Branch</label>
-              <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)}
-                style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }}>
-                {branches.map(b => <option key={b} value={b}>{b}</option>)}
+              <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }}>
+                {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div style={{ background: '#e8f5e9', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', color: '#1a5c2a', fontWeight: '700' }}>
-              {transactions.length} tranzaksyon jwenn
+              {transactions.length} tranzaksyon
             </div>
           </div>
         </div>
       )}
 
-      {/* KESYE INFO */}
-      {!isAdmin && (
-        <div className="no-print" style={{ background: '#e8f5e9', borderRadius: '12px', padding: '15px', marginBottom: '25px', border: '2px solid #1a5c2a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: '700', color: '#1a5c2a', fontSize: '14px' }}>📅 Rapo jounen: {formatDate(today)}</div>
-          <div style={{ fontWeight: '700', color: '#1a5c2a', fontSize: '14px' }}>🏦 {user?.branch}</div>
-          <div style={{ background: '#1a5c2a', color: 'white', padding: '6px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
-            {transactions.length} tranzaksyon
-          </div>
-        </div>
-      )}
-
-      {/* PRINT HEADER — Parèt sèlman lè enprime */}
+      {/* PRINT HEADER */}
       <div style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '16px', padding: '25px', marginBottom: '25px', color: 'white' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '15px' }}>
-          <img src={logo} alt="GKP" style={{ width: '80px', height: '80px', objectFit: 'contain', background: 'white', borderRadius: '10px', padding: '5px' }} />
+          <img src={logo} alt="GKP" style={{ width: '70px', height: '70px', objectFit: 'contain', background: 'white', borderRadius: '10px', padding: '5px' }} />
           <div>
-            <h2 style={{ margin: '0 0 5px', fontSize: '24px', fontWeight: '800' }}>GLOBAL KÈS PAM — GKP</h2>
-            <p style={{ margin: '0 0 3px', opacity: 0.9, fontSize: '14px' }}>Sistèm Bancaire Pwofesyonèl</p>
-            <p style={{ margin: 0, opacity: 0.75, fontSize: '13px' }}>
-              Rapo: {isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)} | Branch: {isAdmin ? selectedBranch : user?.branch}
+            <h2 style={{ margin: '0 0 5px', fontSize: '22px', fontWeight: '800' }}>GLOBAL KÈS PAM — GKP</h2>
+            <p style={{ margin: '0 0 3px', opacity: 0.9, fontSize: '13px' }}>
+              Rapo: {isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)}
+            </p>
+            <p style={{ margin: 0, opacity: 0.75, fontSize: '12px' }}>
+              Branch: {isAdmin ? selectedBranch : user?.branch} | Prepare pa: {user?.name}
             </p>
           </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-          {[
-            { label: 'Dat Jenere', value: new Date().toLocaleDateString('fr-HT') },
-            { label: 'Lè', value: new Date().toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' }) },
-            { label: 'Prepare pa', value: user?.name },
-            { label: 'Branch', value: isAdmin ? selectedBranch : user?.branch },
-          ].map((item, i) => (
-            <div key={i} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
-              <div style={{ fontSize: '10px', opacity: 0.8, marginBottom: '3px' }}>{item.label}</div>
-              <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.value}</div>
-            </div>
-          ))}
         </div>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#1a5c2a', fontWeight: '700' }}>
-          ⏳ Chaje tranzaksyon yo...
-        </div>
+        <div style={{ textAlign: 'center', padding: '40px', color: '#1a5c2a', fontWeight: '700' }}>⏳ Chaje done yo...</div>
       ) : (
         <>
           {/* STATS */}
-          <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: '15px', marginBottom: '25px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)', gap: '15px', marginBottom: '20px' }}>
             {[
-              { label: 'Total Depo', value: 'HTG ' + totalDepo.toLocaleString(), icon: '💰', color: '#2ecc71', show: true },
-              { label: 'Total Retre', value: 'HTG ' + totalRetre.toLocaleString(), icon: '💸', color: '#e74c3c', show: true },
-              { label: 'Total Transfe', value: 'HTG ' + totalTransf.toLocaleString(), icon: '🔄', color: '#3498db', show: true },
-              { label: 'Peman Pre', value: 'HTG ' + totalPre.toLocaleString(), icon: '📋', color: '#f39c12', show: true },
-              { label: 'Benefis Net', value: 'HTG ' + totalNet.toLocaleString(), icon: '📈', color: '#1a5c2a', show: isAdmin },
-            ].filter(s => s.show).map((s, i) => (
-              <div key={i} style={{ background: 'white', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderLeft: '5px solid ' + s.color, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '28px' }}>{s.icon}</span>
+              { label: 'Total Depo', value: 'HTG ' + totalDepo.toLocaleString(), icon: '💰', color: '#2ecc71' },
+              { label: 'Total Retre', value: 'HTG ' + totalRetre.toLocaleString(), icon: '💸', color: '#e74c3c' },
+              { label: 'Total Transfe', value: 'HTG ' + totalTransf.toLocaleString(), icon: '🔄', color: '#3498db' },
+              { label: 'Peman Prè', value: 'HTG ' + totalPre.toLocaleString(), icon: '📋', color: '#f39c12' },
+            ].map((s, i) => (
+              <div key={i} style={{ background: 'white', borderRadius: '14px', padding: '18px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderLeft: '5px solid ' + s.color, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '26px' }}>{s.icon}</span>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: '800', color: s.color }}>{s.value}</div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>{s.label}</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>{s.label}</div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* RAPO PA BRANCH */}
+          {/* BENEFIS AK KOB BLOKE */}
           {isAdmin && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+              <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', border: '2px solid #1a5c2a' }}>
+                <h3 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>📈 Benefis Total</h3>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#1a5c2a', marginBottom: '15px' }}>
+                  HTG {totalBenefis.toLocaleString()}
+                </div>
+                {[
+                  { label: 'Fre Ouveti Kont', value: totalFreOuveti, color: '#9b59b6', icon: '💳' },
+                  { label: 'Enterè Prè', value: totalEntere, color: '#f39c12', icon: '📋' },
+                  { label: 'Penalite Prè', value: totalPenalite, color: '#e74c3c', icon: '⚠️' },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>{item.icon}</span>
+                      <span style={{ fontSize: '13px', color: '#666' }}>{item.label}</span>
+                    </div>
+                    <span style={{ fontWeight: '800', color: item.color, fontSize: '14px' }}>HTG {item.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', border: '2px solid #9b59b6' }}>
+                <h3 style={{ margin: '0 0 15px', color: '#9b59b6', fontSize: '16px', fontWeight: '700' }}>🔒 Kòb Bloke</h3>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#9b59b6', marginBottom: '15px' }}>
+                  HTG {kobBloke.toLocaleString()}
+                </div>
+                <div style={{ background: '#f3e8ff', borderRadius: '10px', padding: '15px', fontSize: '13px', color: '#9b59b6' }}>
+                  <p style={{ margin: '0 0 8px', fontWeight: '700' }}>📊 Detay:</p>
+                  <p style={{ margin: '0 0 5px' }}>• Total Kliyan: {kliyanData.length}</p>
+                  <p style={{ margin: '0 0 5px' }}>• Mwayèn Reserve: HTG {kliyanData.length > 0 ? (kobBloke / kliyanData.length).toFixed(0) : 0}</p>
+                  <p style={{ margin: 0 }}>• Kòb sa pa ka retire pa kliyan yo</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* RAPO PA BRANCH */}
+          {isAdmin && branchList.length > 0 && (
             <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', marginBottom: '25px' }}>
               <h2 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>📊 Rapo pa Branch</h2>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
-                    {['Branch', 'Total Depo', 'Total Retre', 'Total Transfe', 'Peman Pre', 'Tranzaksyon'].map((h, i) => (
+                    {['Branch', 'Depo', 'Retre', 'Transfe', 'Peman Prè', 'Benefis', 'Tranzaksyon'].map((h, i) => (
                       <th key={i} style={{ padding: '12px 15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
                     ))}
                   </tr>
@@ -222,6 +227,7 @@ function Reports({ user }) {
                       <td style={{ padding: '12px 15px', fontWeight: '700', color: '#e74c3c' }}>HTG {b.retre.toLocaleString()}</td>
                       <td style={{ padding: '12px 15px', fontWeight: '700', color: '#3498db' }}>HTG {b.transf.toLocaleString()}</td>
                       <td style={{ padding: '12px 15px', fontWeight: '700', color: '#f39c12' }}>HTG {b.pre.toLocaleString()}</td>
+                      <td style={{ padding: '12px 15px', fontWeight: '700', color: '#1a5c2a' }}>HTG {b.benefis.toLocaleString()}</td>
                       <td style={{ padding: '12px 15px', fontWeight: '600' }}>{b.count}</td>
                     </tr>
                   ))}
@@ -231,6 +237,7 @@ function Reports({ user }) {
                     <td style={{ padding: '12px 15px' }}>HTG {totalRetre.toLocaleString()}</td>
                     <td style={{ padding: '12px 15px' }}>HTG {totalTransf.toLocaleString()}</td>
                     <td style={{ padding: '12px 15px' }}>HTG {totalPre.toLocaleString()}</td>
+                    <td style={{ padding: '12px 15px' }}>HTG {totalBenefis.toLocaleString()}</td>
                     <td style={{ padding: '12px 15px' }}>{transactions.length}</td>
                   </tr>
                 </tbody>

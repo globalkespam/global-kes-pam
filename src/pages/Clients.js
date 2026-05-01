@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 
-function Clients({ user, kesyeOnly, freOuveti }) {
+function Clients({ user, kesyeOnly, parametres, branches }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -15,7 +15,7 @@ function Clients({ user, kesyeOnly, freOuveti }) {
   const [form, setForm] = useState({
     nom: '', prenon: '', adres: '', phone: '', email: '',
     nif: '', dateNesans: '', deviz: 'HTG', seks: '',
-    depoInisyal: '', fre: String(freOuveti || 300), pin: '', branch: ''
+    depoInisyal: '', pin: '', branch: ''
   });
 
   const [formJoint, setFormJoint] = useState({
@@ -24,19 +24,18 @@ function Clients({ user, kesyeOnly, freOuveti }) {
     relasyon: '', pin: ''
   });
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  useEffect(() => { fetchClients(); }, []);
 
   const fetchClients = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('kliyan')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) console.error('Erè:', error);
-    else setClients(data || []);
+    const { data } = await supabase.from('kliyan').select('*').order('created_at', { ascending: false });
+    setClients(data || []);
     setLoading(false);
+  };
+
+  const getFreOuveti = (deviz) => {
+    const key = 'fre_ouveti_' + deviz;
+    return parametres[key] || 300;
   };
 
   const generateNumKont = () => {
@@ -46,8 +45,21 @@ function Clients({ user, kesyeOnly, freOuveti }) {
 
   const addClient = async () => {
     if (!form.nom || !form.prenon || !form.phone) return;
-    const newClient = {
-      num_kont: generateNumKont(),
+    const fre = getFreOuveti(form.deviz);
+    const reserve = parametres.reserve_kont || 500;
+    const depoInisyal = parseFloat(form.depoInisyal) || 0;
+
+    if (depoInisyal < fre + reserve) {
+      alert('Depo inisyal dwe omwen ' + form.deviz + ' ' + (fre + reserve) + '\n(Fre: ' + fre + ' + Reserve: ' + reserve + ')');
+      return;
+    }
+
+    // Balans = Depo - Fre (Reserve rete nan balans men bloke)
+    const balans = depoInisyal - fre;
+    const numKont = generateNumKont();
+
+    const { error } = await supabase.from('kliyan').insert([{
+      num_kont: numKont,
       nom: form.nom,
       prenon: form.prenon,
       adres: form.adres,
@@ -57,45 +69,85 @@ function Clients({ user, kesyeOnly, freOuveti }) {
       date_nesans: form.dateNesans,
       seks: form.seks,
       deviz: form.deviz,
-      balance: parseFloat(form.depoInisyal) || 0,
-      depo_inisyal: parseFloat(form.depoInisyal) || 0,
-      fre: parseFloat(form.fre) || 300,
+      balance: balans,
+      depo_inisyal: depoInisyal,
+      fre: fre,
+      reserve: reserve,
       pin: form.pin,
       branch: form.branch || user?.branch,
       status: 'Aktif',
       kont_joint: isJoint ? formJoint : null,
-    };
+    }]);
 
-    const { error } = await supabase.from('kliyan').insert([newClient]);
-    if (error) {
-      alert('Erè: ' + error.message);
-    } else {
-      fetchClients();
-      setForm({ nom: '', prenon: '', adres: '', phone: '', email: '', nif: '', dateNesans: '', deviz: 'HTG', seks: '', depoInisyal: '', fre: '300', pin: '', branch: '' });
-      setFormJoint({ nom: '', prenon: '', phone: '', email: '', nif: '', dateNesans: '', seks: '', adres: '', relasyon: '', pin: '' });
-      setIsJoint(false);
-      setShowForm(false);
-    }
+    if (error) { alert('Erè: ' + error.message); return; }
+
+    // Sove FRE OUVETI kòm BENEFIS
+    await supabase.from('benefis').insert([{
+      type: 'Fre Ouveti Kont',
+      montan: fre,
+      source: numKont,
+      ref: 'GKP-FRE-' + Date.now().toString().slice(-8),
+      branch: form.branch || user?.branch,
+      kesye: user?.name,
+      note: 'Fre ouveti — ' + form.nom + ' ' + form.prenon,
+    }]);
+
+    // Sove FRE OUVETI kòm TRANZAKSYON
+    await supabase.from('tranzaksyon').insert([{
+      type: 'Fre Ouveti',
+      num_kont: numKont,
+      client: form.nom + ' ' + form.prenon,
+      montan: fre,
+      deviz: form.deviz,
+      branch: form.branch || user?.branch,
+      kesye: user?.name,
+      note: 'Fre ouveti kont',
+      ref: 'GKP-FRE-' + Date.now().toString().slice(-8),
+      benefis: fre,
+    }]);
+
+    // Sove DEPO INISYAL kòm TRANZAKSYON
+    await supabase.from('tranzaksyon').insert([{
+      type: 'Depo',
+      num_kont: numKont,
+      client: form.nom + ' ' + form.prenon,
+      montan: balans,
+      deviz: form.deviz,
+      branch: form.branch || user?.branch,
+      kesye: user?.name,
+      note: 'Depo inisyal — ouveti kont',
+      ref: 'GKP-DEP-' + Date.now().toString().slice(-8),
+    }]);
+
+    fetchClients();
+    setForm({ nom: '', prenon: '', adres: '', phone: '', email: '', nif: '', dateNesans: '', deviz: 'HTG', seks: '', depoInisyal: '', pin: '', branch: '' });
+    setFormJoint({ nom: '', prenon: '', phone: '', email: '', nif: '', dateNesans: '', seks: '', adres: '', relasyon: '', pin: '' });
+    setIsJoint(false);
+    setShowForm(false);
+    alert('✅ Kont kreye!\nFre: ' + form.deviz + ' ' + fre + ' (benefis)\nBalans: ' + form.deviz + ' ' + balans + ' (enkli HTG ' + reserve + ' bloke)');
   };
 
   const toggleBloke = async (client) => {
     const newStatus = client.status === 'Aktif' ? 'Bloke' : 'Aktif';
-    const { error } = await supabase
-      .from('kliyan')
-      .update({ status: newStatus })
-      .eq('id', client.id);
-    if (!error) fetchClients();
+    await supabase.from('kliyan').update({ status: newStatus }).eq('id', client.id);
+    fetchClients();
   };
 
   const changePin = async (clientId, newPin) => {
-    const { error } = await supabase
-      .from('kliyan')
-      .update({ pin: newPin })
-      .eq('id', clientId);
+    await supabase.from('kliyan').update({ pin: newPin }).eq('id', clientId);
+    fetchClients();
+    setShowDetail({ ...showDetail, pin: newPin });
+    alert('PIN chanje avèk siksè!');
+  };
+
+  const changeReserve = async (client, nouvoReserve) => {
+    const reserve = parseFloat(nouvoReserve);
+    if (isNaN(reserve) || reserve < 0) { alert('Mete yon montan valid!'); return; }
+    const { error } = await supabase.from('kliyan').update({ reserve }).eq('id', client.id);
     if (!error) {
       fetchClients();
-      setShowDetail({ ...showDetail, pin: newPin });
-      alert('PIN chanje avèk siksè!');
+      setShowDetail({ ...showDetail, reserve });
+      alert('✅ Reserve chanje — HTG ' + reserve.toLocaleString());
     }
   };
 
@@ -107,6 +159,10 @@ function Clients({ user, kesyeOnly, freOuveti }) {
 
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '13px' };
   const labelStyle = { display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' };
+
+  const branchOptions = branches && branches.length > 0
+    ? branches.filter(b => b.status === 'Aktif')
+    : [{ nom: 'Branch Potoprens' }, { nom: 'Branch Kapo' }, { nom: 'Siege Central' }];
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', flexDirection: 'column', gap: '15px' }}>
@@ -189,29 +245,47 @@ function Clients({ user, kesyeOnly, freOuveti }) {
                 <option value="CAD">CAD - Dola Kanadyen</option>
               </select>
             </div>
-            <div><label style={labelStyle}>Depo Inisyal</label><input type="number" value={form.depoInisyal} onChange={e => setForm({...form, depoInisyal: e.target.value})} placeholder="Montan..." style={inputStyle} /></div>
             <div>
-              <label style={labelStyle}>Fre Ouvèti</label>
-              <input
-                type="number"
-                value={form.fre}
-                onChange={e => isAdmin && setForm({...form, fre: e.target.value})}
-                readOnly={!isAdmin}
-                style={{ ...inputStyle, background: isAdmin ? 'white' : '#f5f5f5', color: isAdmin ? '#333' : '#999', cursor: isAdmin ? 'text' : 'not-allowed' }}
-              />
-              
+              <label style={labelStyle}>Depo Inisyal</label>
+              <input type="number" value={form.depoInisyal} onChange={e => setForm({...form, depoInisyal: e.target.value})} placeholder="Montan..." style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Fre Ouvèti (Otomatik)</label>
+              <input type="text" value={form.deviz + ' ' + getFreOuveti(form.deviz)} readOnly style={{ ...inputStyle, background: '#f0f9f0', fontWeight: '700', color: '#1a5c2a', cursor: 'not-allowed' }} />
+            </div>
+            <div>
+              <label style={labelStyle}>Reserve Bloke (Otomatik)</label>
+              <input type="text" value={'HTG ' + (parametres.reserve_kont || 500)} readOnly style={{ ...inputStyle, background: '#fff3e0', fontWeight: '700', color: '#e67e22', cursor: 'not-allowed' }} />
             </div>
             <div>
               <label style={labelStyle}>Branch</label>
               <select value={form.branch} onChange={e => setForm({...form, branch: e.target.value})} style={inputStyle}>
                 <option value="">Chwazi Branch...</option>
-                <option value="Branch Potoprens">Branch Potoprens</option>
-                <option value="Branch Kapo">Branch Kapo</option>
-                <option value="Siege Central">Siege Central</option>
+                {branchOptions.map((b, i) => (
+                  <option key={i} value={b.nom}>{b.nom}</option>
+                ))}
               </select>
             </div>
-            <div><label style={labelStyle}>PIN Kliyan (4 chif)</label><input type="password" value={form.pin} onChange={e => setForm({...form, pin: e.target.value})} placeholder="****" maxLength="4" style={inputStyle} /></div>
+            <div>
+              <label style={labelStyle}>PIN Kliyan (4 chif)</label>
+              <input type="password" value={form.pin} onChange={e => setForm({...form, pin: e.target.value})} placeholder="****" maxLength="4" style={inputStyle} />
+            </div>
           </div>
+
+          {form.depoInisyal && (
+            <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '15px', marginBottom: '20px', border: '2px solid #1a5c2a' }}>
+              <div style={{ fontSize: '14px', fontWeight: '700', color: '#1a5c2a', marginBottom: '8px' }}>📊 Kalkil Otomatik:</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', fontSize: '13px' }}>
+                <div>💰 Depo: <strong>{form.deviz} {parseFloat(form.depoInisyal || 0).toLocaleString()}</strong></div>
+                <div>💳 Fre: <strong>-{form.deviz} {getFreOuveti(form.deviz)}</strong></div>
+                <div>🔒 Bloke: <strong>HTG {parametres.reserve_kont || 500}</strong></div>
+                <div>✅ Disponib: <strong>{form.deviz} {Math.max(0, parseFloat(form.depoInisyal || 0) - getFreOuveti(form.deviz) - (parametres.reserve_kont || 500)).toLocaleString()}</strong></div>
+              </div>
+              <div style={{ marginTop: '10px', fontSize: '15px', fontWeight: '800', color: '#1a5c2a' }}>
+                Balans Total (enkli bloke): {form.deviz} {Math.max(0, parseFloat(form.depoInisyal || 0) - getFreOuveti(form.deviz)).toLocaleString()}
+              </div>
+            </div>
+          )}
 
           {/* KONT JOINT */}
           <div style={{ marginBottom: '20px' }}>
@@ -261,22 +335,35 @@ function Clients({ user, kesyeOnly, freOuveti }) {
       {/* DETAIL MODAL */}
       {showDetail && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '580px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
+          <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '620px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ margin: 0, color: '#1a5c2a' }}>Detay Kliyan</h2>
               <button onClick={() => { setShowDetail(null); setShowPin(false); }} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', cursor: 'pointer', fontWeight: '700' }}>Femen</button>
             </div>
 
+            {/* HEADER KLIYAN */}
             <div style={{ background: showDetail.status === 'Bloke' ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '12px', padding: '20px', color: 'white', marginBottom: '20px', textAlign: 'center' }}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>{showDetail.seks === 'Fanm' ? '👩' : '👨'}</div>
+              <div style={{ fontSize: '36px', marginBottom: '8px' }}>{showDetail.seks === 'Fanm' ? '👩' : '👨'}</div>
               <h3 style={{ margin: '0 0 5px' }}>{showDetail.nom} {showDetail.prenon}</h3>
-              <p style={{ margin: '0 0 5px', opacity: 0.85, fontSize: '13px' }}>{showDetail.num_kont}</p>
-              <p style={{ margin: '0 0 5px', fontSize: '22px', fontWeight: '800' }}>{showDetail.deviz} {showDetail.balance?.toLocaleString()}</p>
-              <span style={{ background: showDetail.status === 'Bloke' ? '#fff3e0' : 'rgba(255,255,255,0.2)', color: showDetail.status === 'Bloke' ? '#e67e22' : 'white', padding: '4px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: '700' }}>
-                {showDetail.status === 'Bloke' ? '🔒 Kont Bloke' : '✅ Kont Aktif'}
-              </span>
+              <p style={{ margin: '0 0 10px', opacity: 0.85, fontSize: '13px' }}>{showDetail.num_kont}</p>
+
+              <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '10px', padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div>
+                  <div style={{ fontSize: '10px', opacity: 0.8, marginBottom: '4px' }}>BALANS TOTAL</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900' }}>{showDetail.deviz} {showDetail.balance?.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', opacity: 0.8, marginBottom: '4px' }}>🔒 BLOKE</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#f39c12' }}>HTG {(showDetail.reserve || 500).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', opacity: 0.8, marginBottom: '4px' }}>✅ DISPONIB</div>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#2ecc71' }}>{showDetail.deviz} {Math.max(0, (showDetail.balance || 0) - (showDetail.reserve || 500)).toLocaleString()}</div>
+                </div>
+              </div>
             </div>
 
+            {/* INFO */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
               {[
                 { label: 'Telefon', value: showDetail.phone },
@@ -288,7 +375,7 @@ function Clients({ user, kesyeOnly, freOuveti }) {
                 { label: 'Branch', value: showDetail.branch },
                 { label: 'Deviz', value: showDetail.deviz },
                 { label: 'Depo Inisyal', value: showDetail.deviz + ' ' + showDetail.depo_inisyal },
-                { label: 'Fre Ouveti', value: 'HTG ' + showDetail.fre },
+                { label: 'Fre Ouveti', value: showDetail.deviz + ' ' + showDetail.fre },
               ].map((item, i) => (
                 <div key={i} style={{ background: '#f9f9f9', borderRadius: '8px', padding: '10px' }}>
                   <div style={{ fontSize: '11px', color: '#999', marginBottom: '3px' }}>{item.label}</div>
@@ -296,6 +383,56 @@ function Clients({ user, kesyeOnly, freOuveti }) {
                 </div>
               ))}
             </div>
+
+            {/* RESERVE BLOKE — ADMIN SELMAN */}
+            {isAdmin && (
+              <div style={{ background: '#f3e8ff', borderRadius: '10px', padding: '15px', marginBottom: '15px', border: '2px solid #9b59b6' }}>
+                <div style={{ fontWeight: '700', color: '#9b59b6', fontSize: '14px', marginBottom: '12px' }}>
+                  🔒 Jere Kòb Bloke — Aktyèl: HTG {(showDetail.reserve || 500).toLocaleString()}
+                </div>
+
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#9b59b6', marginBottom: '5px' }}>➕ Ajoute Blokaj (pou prè, garanti...)</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input type="number" placeholder="Montan pou bloke..." id="ajouBlokInput"
+                      style={{ flex: 1, padding: '8px 12px', border: '2px solid #9b59b6', borderRadius: '8px', fontSize: '13px' }} />
+                    <button onClick={() => {
+                      const input = document.getElementById('ajouBlokInput');
+                      const ajout = parseFloat(input.value);
+                      if (!ajout || ajout <= 0) { alert('Mete yon montan valid!'); return; }
+                      changeReserve(showDetail, (showDetail.reserve || 500) + ajout);
+                      input.value = '';
+                    }} style={{ padding: '8px 16px', background: '#9b59b6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}>
+                      🔒 Bloke
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#2ecc71', marginBottom: '5px' }}>➖ Debloke Kòb (apre prè peye)</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input type="number" placeholder={'Max: HTG ' + Math.max(0, (showDetail.reserve || 500) - 500)} id="deblokInput"
+                      style={{ flex: 1, padding: '8px 12px', border: '2px solid #2ecc71', borderRadius: '8px', fontSize: '13px' }} />
+                    <button onClick={() => {
+                      const input = document.getElementById('deblokInput');
+                      const retire = parseFloat(input.value);
+                      const reserveMin = 500;
+                      const reserveAktyel = showDetail.reserve || 500;
+                      if (!retire || retire <= 0) { alert('Mete yon montan valid!'); return; }
+                      const nouvoReserve = reserveAktyel - retire;
+                      if (nouvoReserve < reserveMin) {
+                        alert('Pa ka debloke plis!\nReserve minimòm: HTG ' + reserveMin);
+                        return;
+                      }
+                      changeReserve(showDetail, nouvoReserve);
+                      input.value = '';
+                    }} style={{ padding: '8px 16px', background: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}>
+                      🔓 Debloke
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* PIN */}
             <div style={{ background: '#fff3e0', borderRadius: '10px', padding: '15px', marginBottom: '15px', border: '2px solid #f39c12' }}>
@@ -324,6 +461,7 @@ function Clients({ user, kesyeOnly, freOuveti }) {
               )}
             </div>
 
+            {/* KONT JOINT */}
             {showDetail.kont_joint && (
               <div>
                 <h4 style={{ color: '#3498db', margin: '0 0 10px' }}>👫 Titile 2 — Kont Joint</h4>
@@ -358,7 +496,7 @@ function Clients({ user, kesyeOnly, freOuveti }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
-              {['Nimewo Kont', 'Non Konple', 'Telefon', 'Deviz', 'Balans', 'Branch', 'Estati', 'Aksyon'].map((h, i) => (
+              {['Nimewo Kont', 'Non Konple', 'Telefon', 'Deviz', 'Balans Total', 'Bloke', 'Branch', 'Estati', 'Aksyon'].map((h, i) => (
                 <th key={i} style={{ padding: '15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
               ))}
             </tr>
@@ -366,7 +504,7 @@ function Clients({ user, kesyeOnly, freOuveti }) {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="9" style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
                   <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
                   Pa gen kliyan ankò
                 </td>
@@ -382,7 +520,17 @@ function Clients({ user, kesyeOnly, freOuveti }) {
                       {client.deviz}
                     </span>
                   </td>
-                  <td style={{ padding: '14px 15px', fontWeight: '700', color: '#2d8a45' }}>{client.deviz} {client.balance?.toLocaleString()}</td>
+                  <td style={{ padding: '14px 15px' }}>
+                    <div style={{ fontWeight: '700', color: '#2d8a45', fontSize: '14px' }}>{client.deviz} {client.balance?.toLocaleString()}</div>
+                    <div style={{ fontSize: '11px', color: '#27ae60', marginTop: '2px' }}>
+                      ✅ Disponib: {client.deviz} {Math.max(0, (client.balance || 0) - (client.reserve || 500)).toLocaleString()}
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 15px' }}>
+                    <span style={{ background: '#f3e8ff', color: '#9b59b6', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                      🔒 HTG {(client.reserve || 500).toLocaleString()}
+                    </span>
+                  </td>
                   <td style={{ padding: '14px 15px' }}>
                     <span style={{ background: '#e8f5e9', color: '#1a5c2a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
                       {client.branch}
