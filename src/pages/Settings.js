@@ -8,6 +8,8 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
   const [loading, setLoading] = useState(true);
   const [showPassIndex, setShowPassIndex] = useState(null);
   const [showBranchForm, setShowBranchForm] = useState(false);
+  const [editUser, setEditUser] = useState(null);
+  const [editBranch, setEditBranch] = useState(null);
   const [newBranch, setNewBranch] = useState({ nom: '', adres: '', telefon: '', responsab: '' });
 
   const [localParams, setLocalParams] = useState({
@@ -34,9 +36,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
     });
   }, [parametres]);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -70,29 +70,36 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
     showSuccess(u.name + ' efase!');
   };
 
-  const changePassword = async (u, newPass) => {
-    if (!newPass || newPass.length < 4) return;
-    await supabase.from('itilizate').update({ password: newPass }).eq('id', u.id);
+  const saveEditUser = async () => {
+    if (!editUser) return;
+    const updateData = {
+      name: editUser.name,
+      role: editUser.role,
+      branch: editUser.branch,
+    };
+    if (editUser.newPassword) updateData.password = editUser.newPassword;
+    await supabase.from('itilizate').update(updateData).eq('id', editUser.id);
     fetchUsers();
-    showSuccess('Modpas ' + u.name + ' chanje!');
+    setEditUser(null);
+    showSuccess('Itilizatè ' + editUser.name + ' mete ajou!');
   };
 
-  const saveOreKes = async (branchNom, ore) => {
-    const branch = branches.find(b => b.nom === branchNom);
-    if (!branch) return;
+  const saveEditBranch = async () => {
+    if (!editBranch) return;
     await saveBranch({
-      id: branch.id,
-      nom: branch.nom,
-      adres: branch.adres,
-      telefon: branch.telefon,
-      responsab: branch.responsab,
-      status: branch.status,
-      louvri: ore.louvri,
-      femen: ore.femen,
-      aktif: ore.aktif,
-      jou: ore.jou,
+      id: editBranch.id,
+      nom: editBranch.nom,
+      adres: editBranch.adres,
+      telefon: editBranch.telefon,
+      responsab: editBranch.responsab,
+      status: editBranch.status,
+      louvri: editBranch.louvri,
+      femen: editBranch.femen,
+      aktif: editBranch.aktif,
+      jou: editBranch.jou,
     });
-    showSuccess('Ore ' + branchNom + ' sove nan Supabase!');
+    setEditBranch(null);
+    showSuccess('Branch ' + editBranch.nom + ' mete ajou!');
   };
 
   const addBranch = async () => {
@@ -118,10 +125,17 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
     showSuccess('Branch ' + branch.nom + ' efase!');
   };
 
-  const toggleBranchStatus = async (branch) => {
-    const newStatus = branch.status === 'Aktif' ? 'Inaktif' : 'Aktif';
-    await saveBranch({ ...branch, status: newStatus });
-    showSuccess('Branch ' + branch.nom + ' mise a jou!');
+  const saveOreKes = async (branchNom, ore) => {
+    const branch = branches.find(b => b.nom === branchNom);
+    if (!branch) return;
+    await saveBranch({
+      id: branch.id, nom: branch.nom, adres: branch.adres,
+      telefon: branch.telefon, responsab: branch.responsab,
+      status: branch.status,
+      louvri: ore.louvri, femen: ore.femen,
+      aktif: ore.aktif, jou: ore.jou,
+    });
+    showSuccess('Ore ' + branchNom + ' sove!');
   };
 
   const inputStyle = { width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
@@ -134,6 +148,10 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
     { id: 'branches', label: 'Branch', icon: '🏦' },
     { id: 'security', label: 'Sekirite', icon: '🔒' },
   ];
+
+  const branchOptions = branches && branches.length > 0
+    ? branches.map(b => b.nom)
+    : ['Branch Potoprens', 'Branch Kapo', 'Siege Central'];
 
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
@@ -148,6 +166,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
         </div>
       )}
 
+      {/* TABS */}
       <div style={{ display: 'flex', gap: '5px', marginBottom: '25px', background: 'white', borderRadius: '12px', padding: '5px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', width: 'fit-content' }}>
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ padding: '10px 20px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: activeTab === tab.id ? '#1a5c2a' : 'transparent', color: activeTab === tab.id ? 'white' : '#666' }}>
@@ -159,27 +178,19 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
       {/* JENERAL */}
       {activeTab === 'general' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-
-          {/* FRE OUVETI PA DEVIZ */}
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', gridColumn: '1 / -1' }}>
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Ouveti Kont pa Deviz</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', marginBottom: '20px' }}>
               {[
-                { key: 'fre_ouveti_HTG', label: '🇭🇹 HTG', placeholder: '300' },
-                { key: 'fre_ouveti_USD', label: '🇺🇸 USD', placeholder: '5' },
-                { key: 'fre_ouveti_DOP', label: '🇩🇴 DOP', placeholder: '150' },
-                { key: 'fre_ouveti_EUR', label: '🇪🇺 EUR', placeholder: '10' },
-                { key: 'fre_ouveti_CAD', label: '🇨🇦 CAD', placeholder: '8' },
+                { key: 'fre_ouveti_HTG', label: '🇭🇹 HTG' },
+                { key: 'fre_ouveti_USD', label: '🇺🇸 USD' },
+                { key: 'fre_ouveti_DOP', label: '🇩🇴 DOP' },
+                { key: 'fre_ouveti_EUR', label: '🇪🇺 EUR' },
+                { key: 'fre_ouveti_CAD', label: '🇨🇦 CAD' },
               ].map((item, i) => (
                 <div key={i}>
                   <label style={labelStyle}>{item.label}</label>
-                  <input
-                    type="number"
-                    value={localParams[item.key]}
-                    onChange={e => setLocalParams({ ...localParams, [item.key]: parseFloat(e.target.value) || 0 })}
-                    placeholder={item.placeholder}
-                    style={inputStyle}
-                  />
+                  <input type="number" value={localParams[item.key]} onChange={e => setLocalParams({ ...localParams, [item.key]: parseFloat(e.target.value) || 0 })} style={inputStyle} />
                 </div>
               ))}
             </div>
@@ -188,7 +199,6 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
             </button>
           </div>
 
-          {/* FRE TRANSFE */}
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
             <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Fre Transfe</h3>
             <div style={{ marginBottom: '15px' }}>
@@ -199,14 +209,11 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
               <label style={labelStyle}>Fre Transfe Branch-Branch (HTG)</label>
               <input type="number" value={localParams.fre_transf_branch} onChange={e => setLocalParams({ ...localParams, fre_transf_branch: parseFloat(e.target.value) || 0 })} style={inputStyle} />
             </div>
-            <button onClick={saveAllParams} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>
-              💾 Sove
-            </button>
+            <button onClick={saveAllParams} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>💾 Sove</button>
           </div>
 
-          {/* RESERVE */}
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Reserve Obligatwa pa Kont</h3>
+            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Reserve Obligatwa</h3>
             <div style={{ marginBottom: '15px' }}>
               <label style={labelStyle}>Montan Bloke (HTG)</label>
               <input type="number" value={localParams.reserve_kont} onChange={e => setLocalParams({ ...localParams, reserve_kont: parseFloat(e.target.value) || 0 })} style={inputStyle} />
@@ -214,9 +221,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
             <div style={{ background: '#fff3e0', borderRadius: '8px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#e67e22' }}>
               ⚠️ HTG {localParams.reserve_kont} bloke — kliyan pa ka retire li
             </div>
-            <button onClick={saveAllParams} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>
-              💾 Sove
-            </button>
+            <button onClick={saveAllParams} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>💾 Sove</button>
           </div>
         </div>
       )}
@@ -226,7 +231,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
         <div>
           <div style={{ background: '#e8f5e9', borderRadius: '12px', padding: '15px', marginBottom: '20px', border: '2px solid #1a5c2a' }}>
             <p style={{ margin: 0, color: '#1a5c2a', fontWeight: '600', fontSize: '14px' }}>
-              ✅ Chanjman yo ap sove dirèkteman nan Supabase — yo ap rete menm apre ou femen app la!
+              ✅ Chanjman yo ap sove dirèkteman nan Supabase!
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
@@ -236,15 +241,12 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
                 <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderLeft: '5px solid ' + (ore.aktif ? '#1a5c2a' : '#e74c3c') }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h3 style={{ margin: 0, color: '#1a5c2a', fontSize: '15px', fontWeight: '700' }}>🏦 {branch.nom}</h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '12px', color: '#666' }}>{ore.aktif ? 'Aktif' : 'Dezaktive'}</span>
-                      <div onClick={() => {
-                        const newOre = { ...ore, aktif: !ore.aktif };
-                        setOreKes({ ...oreKes, [branch.nom]: newOre });
-                        saveOreKes(branch.nom, newOre);
-                      }} style={{ width: '44px', height: '24px', background: ore.aktif ? '#1a5c2a' : '#ccc', borderRadius: '12px', cursor: 'pointer', position: 'relative' }}>
-                        <div style={{ position: 'absolute', top: '2px', left: ore.aktif ? '22px' : '2px', width: '20px', height: '20px', background: 'white', borderRadius: '50%', transition: 'left 0.3s' }} />
-                      </div>
+                    <div onClick={() => {
+                      const newOre = { ...ore, aktif: !ore.aktif };
+                      setOreKes({ ...oreKes, [branch.nom]: newOre });
+                      saveOreKes(branch.nom, newOre);
+                    }} style={{ width: '44px', height: '24px', background: ore.aktif ? '#1a5c2a' : '#ccc', borderRadius: '12px', cursor: 'pointer', position: 'relative' }}>
+                      <div style={{ position: 'absolute', top: '2px', left: ore.aktif ? '22px' : '2px', width: '20px', height: '20px', background: 'white', borderRadius: '50%', transition: 'left 0.3s' }} />
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
@@ -275,7 +277,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
                     </div>
                   </div>
                   <button onClick={() => saveOreKes(branch.nom, ore)} style={{ background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700', width: '100%' }}>
-                    💾 Sove Ore nan Supabase
+                    💾 Sove Ore
                   </button>
                 </div>
               );
@@ -286,76 +288,139 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
 
       {/* ITILIZATE */}
       {activeTab === 'users' && (
-        <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Jere Itilizate</h3>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>⏳ Chaje...</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
-                  {['Non', 'Wol', 'Branch', 'Estati', 'Modpas', 'Aksyon'].map((h, i) => (
-                    <th key={i} style={{ padding: '12px 15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u, i) => (
-                  <tr key={u.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '12px 15px', fontWeight: '600' }}>{u.name}</td>
-                    <td style={{ padding: '12px 15px' }}>
-                      <span style={{ background: u.role === 'Admin' ? '#f3e8ff' : '#ebf5fb', color: u.role === 'Admin' ? '#9b59b6' : '#3498db', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>{u.role}</span>
-                    </td>
-                    <td style={{ padding: '12px 15px', color: '#666', fontSize: '13px' }}>{u.branch}</td>
-                    <td style={{ padding: '12px 15px' }}>
-                      <span style={{ background: u.blocked ? '#fdf2f2' : '#e8f5e9', color: u.blocked ? '#e74c3c' : '#1a5c2a', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
-                        {u.blocked ? 'Bloke' : 'Aktif'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 15px' }}>
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <input
-                          type={showPassIndex === i ? 'text' : 'password'}
-                          defaultValue={u.password}
-                          onBlur={e => { if (e.target.value !== u.password) changePassword(u, e.target.value); }}
-                          style={{ padding: '6px 30px 6px 10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px', width: '120px' }}
-                        />
-                        <button onClick={() => setShowPassIndex(showPassIndex === i ? null : i)} style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: 0 }}>
-                          {showPassIndex === i ? '🙈' : '👁️'}
-                        </button>
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 15px' }}>
-                      <div style={{ display: 'flex', gap: '5px' }}>
-                        {u.name !== user.name && (
-                          <>
-                            <button onClick={() => toggleBloke(u)} style={{ background: u.blocked ? '#2ecc71' : '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
-                              {u.blocked ? 'Debloke' : 'Bloke'}
-                            </button>
-                            <button onClick={() => deleteUser(u)} style={{ background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
-                              Efase
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div>
+          {/* EDIT MODAL */}
+          {editUser && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: 'white', borderRadius: '16px', padding: '30px', width: '450px', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
+                <h3 style={{ margin: '0 0 20px', color: '#1a5c2a' }}>✏️ Modifye Itilizatè</h3>
+                <div style={{ display: 'grid', gap: '15px', marginBottom: '20px' }}>
+                  <div>
+                    <label style={labelStyle}>Non</label>
+                    <input value={editUser.name} onChange={e => setEditUser({...editUser, name: e.target.value})} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Wol</label>
+                    <select value={editUser.role} onChange={e => setEditUser({...editUser, role: e.target.value})} style={inputStyle}>
+                      <option value="Admin">Admin</option>
+                      <option value="Kesye">Kesye</option>
+                      <option value="Ajan Pre">Ajan Pre</option>
+                      <option value="Manaje Sikisal">Manaje Sikisal</option>
+                      <option value="Resepsyonis">Resepsyonis</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Branch</label>
+                    <select value={editUser.branch} onChange={e => setEditUser({...editUser, branch: e.target.value})} style={inputStyle}>
+                      {branchOptions.map((b, i) => <option key={i} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Nouvo Modpas (kite vid si pa chanje)</label>
+                    <input type="password" value={editUser.newPassword || ''} onChange={e => setEditUser({...editUser, newPassword: e.target.value})} placeholder="Nouvo modpas..." style={inputStyle} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={saveEditUser} style={{ flex: 1, padding: '12px', background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}>💾 Sove</button>
+                  <button onClick={() => setEditUser(null)} style={{ flex: 1, padding: '12px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}>Anile</button>
+                </div>
+              </div>
+            </div>
           )}
+
+          <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
+            <h3 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Jere Itilizate</h3>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>⏳ Chaje...</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
+                    {['Non', 'Wol', 'Branch', 'Estati', 'Aksyon'].map((h, i) => (
+                      <th key={i} style={{ padding: '12px 15px', color: 'white', textAlign: 'left', fontSize: '13px', fontWeight: '700' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u, i) => (
+                    <tr key={u.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '12px 15px', fontWeight: '600' }}>{u.name}</td>
+                      <td style={{ padding: '12px 15px' }}>
+                        <span style={{ background: u.role === 'Admin' ? '#f3e8ff' : '#ebf5fb', color: u.role === 'Admin' ? '#9b59b6' : '#3498db', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>{u.role}</span>
+                      </td>
+                      <td style={{ padding: '12px 15px', color: '#666', fontSize: '13px' }}>{u.branch}</td>
+                      <td style={{ padding: '12px 15px' }}>
+                        <span style={{ background: u.blocked ? '#fdf2f2' : '#e8f5e9', color: u.blocked ? '#e74c3c' : '#1a5c2a', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                          {u.blocked ? '🔒 Bloke' : '✅ Aktif'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 15px' }}>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <button onClick={() => setEditUser({...u, newPassword: ''})} style={{ background: '#3498db', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
+                            ✏️ Modifye
+                          </button>
+                          {u.name !== user.name && (
+                            <>
+                              <button onClick={() => toggleBloke(u)} style={{ background: u.blocked ? '#2ecc71' : '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
+                                {u.blocked ? '🔓' : '🔒'}
+                              </button>
+                              <button onClick={() => deleteUser(u)} style={{ background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700' }}>
+                                🗑️
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 
       {/* BRANCH */}
       {activeTab === 'branches' && (
         <div>
+          {/* EDIT BRANCH MODAL */}
+          {editBranch && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: 'white', borderRadius: '16px', padding: '30px', width: '450px', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
+                <h3 style={{ margin: '0 0 20px', color: '#1a5c2a' }}>✏️ Modifye Branch</h3>
+                <div style={{ display: 'grid', gap: '15px', marginBottom: '20px' }}>
+                  <div>
+                    <label style={labelStyle}>Non Branch</label>
+                    <input value={editBranch.nom} onChange={e => setEditBranch({...editBranch, nom: e.target.value})} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Adres</label>
+                    <input value={editBranch.adres || ''} onChange={e => setEditBranch({...editBranch, adres: e.target.value})} placeholder="Adres..." style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Telefon</label>
+                    <input value={editBranch.telefon || ''} onChange={e => setEditBranch({...editBranch, telefon: e.target.value})} placeholder="509-XXXX-XXXX" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Responsab</label>
+                    <input value={editBranch.responsab || ''} onChange={e => setEditBranch({...editBranch, responsab: e.target.value})} placeholder="Non responsab..." style={inputStyle} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={saveEditBranch} style={{ flex: 1, padding: '12px', background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}>💾 Sove</button>
+                  <button onClick={() => setEditBranch(null)} style={{ flex: 1, padding: '12px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700' }}>Anile</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3 style={{ margin: 0, color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>Jere Branch</h3>
             <button onClick={() => setShowBranchForm(!showBranchForm)} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontWeight: '700' }}>
               + Nouvo Branch
             </button>
           </div>
+
           {showBranchForm && (
             <div style={{ background: 'white', borderRadius: '16px', padding: '25px', marginBottom: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', border: '2px solid #1a5c2a' }}>
               <h4 style={{ margin: '0 0 15px', color: '#1a5c2a' }}>Ajoute Nouvo Branch</h4>
@@ -371,6 +436,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
               </div>
             </div>
           )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
             {branches.map((branch, i) => (
               <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderTop: '4px solid #1a5c2a' }}>
@@ -384,11 +450,14 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
                   <div>👤 {branch.responsab}</div>
                 </div>
                 <div style={{ display: 'flex', gap: '5px' }}>
-                  <button onClick={() => toggleBranchStatus(branch)} style={{ flex: 1, padding: '8px', background: branch.status === 'Aktif' ? '#e74c3c' : '#2ecc71', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
+                  <button onClick={() => setEditBranch({...branch})} style={{ flex: 1, padding: '8px', background: '#3498db', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
+                    ✏️ Modifye
+                  </button>
+                  <button onClick={() => saveBranch({...branch, status: branch.status === 'Aktif' ? 'Inaktif' : 'Aktif'})} style={{ flex: 1, padding: '8px', background: branch.status === 'Aktif' ? '#e74c3c' : '#2ecc71', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
                     {branch.status === 'Aktif' ? 'Dezaktive' : 'Aktive'}
                   </button>
-                  <button onClick={() => deleteBranch(branch)} style={{ padding: '8px 12px', background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
-                    Efase
+                  <button onClick={() => deleteBranch(branch)} style={{ padding: '8px 10px', background: '#95a5a6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '11px' }}>
+                    🗑️
                   </button>
                 </div>
               </div>

@@ -84,7 +84,13 @@ function Reports({ user, branches }) {
     return '#f39c12';
   };
 
-  const formatDate = (d) => { if (!d) return ''; return new Date(d + 'T12:00:00').toLocaleDateString('fr-HT'); };
+  const formatDate = (d) => {
+  if (!d) return '';
+  try {
+    if (d.includes('T')) return new Date(d).toLocaleDateString('fr-HT');
+    return new Date(d + 'T12:00:00').toLocaleDateString('fr-HT');
+  } catch { return d; }
+};
   const formatTime = (d) => { if (!d) return ''; return new Date(d).toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' }); };
 
   return (
