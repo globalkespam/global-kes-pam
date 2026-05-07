@@ -6,7 +6,7 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
   const [successMsg, setSuccessMsg] = useState('');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showPassIndex, setShowPassIndex] = useState(null);
+  
   const [showBranchForm, setShowBranchForm] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [editBranch, setEditBranch] = useState(null);
