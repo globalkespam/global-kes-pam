@@ -4,7 +4,6 @@ import logo from '../assets/logo.jpeg.jpeg';
 
 function Transactions({ user, parametres }) {
   const [activeTab, setActiveTab] = useState('depo');
-  const [resi, setResi] = useState(null);
   const [clients, setClients] = useState([]);
   const [historik, setHistorik] = useState([]);
   const [loadingHistorik, setLoadingHistorik] = useState(false);
@@ -35,9 +34,7 @@ function Transactions({ user, parametres }) {
   const reserveKont = parametres?.reserve_kont || 500;
   const transFre = transType === 'kont-kont' ? freTransfEten : freTransfBranch;
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  useEffect(() => { fetchClients(); }, []);
 
   const fetchClients = async () => {
     const { data } = await supabase.from('kliyan').select('*');
@@ -56,9 +53,59 @@ function Transactions({ user, parametres }) {
     setLoadingHistorik(false);
   };
 
+  const printResi = (data) => {
+    const printDiv = document.getElementById('resi-direct-print');
+    if (!printDiv) return;
+
+    const row = (label, value) =>
+      `<tr>
+        <td style="padding:3px 4px;font-size:13px;color:#000;">${label}</td>
+        <td style="padding:3px 4px;font-size:13px;font-weight:bold;color:#000;text-align:right;">${value}</td>
+      </tr>`;
+
+    printDiv.innerHTML = `
+      <div style="text-align:center;margin-bottom:8px;">
+        <img src="${logo}" style="width:100px;height:100px;object-fit:contain;" />
+        <div style="font-size:16px;font-weight:bold;margin-top:3px;">RESI ${data.type}</div>
+        <div style="font-size:13px;">Global Kes Pam — GKP</div>
+      </div>
+
+      <div style="border-top:1px dashed #000;border-bottom:1px dashed #000;padding:5px 0;margin-bottom:8px;text-align:center;">
+        <div style="font-size:13px;color:#000;">Nimewo Referans</div>
+        <div style="font-size:14px;font-weight:bold;">${data.ref}</div>
+        <div style="font-size:13px;color:#000;">${data.date}</div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+        ${data.type !== 'TRANSFERE'
+          ? row('Nom du Compte:', data.client || '') + row('Nimewo Kont:', data.numKont || '')
+          : row('Kont Sous:', data.kontSous || '') + row('Kont Dest.:', data.kontDest || '')
+        }
+        ${row('Branch:', data.branch || '')}
+        ${row('Kesye:', data.kesye || '')}
+        ${data.mode ? row('Mod Peman:', data.mode) : ''}
+      </table>
+
+      <div style="border:1px solid #000;padding:8px;text-align:center;margin-bottom:8px;">
+        <div style="font-size:13px;color:#000;">MONTAN</div>
+        <div style="font-size:22px;font-weight:bold;">${data.deviz} ${data.montan?.toLocaleString()}</div>
+        ${data.fre > 0 ? `<div style="font-size:13px;color:#c00;">Fre: HTG ${data.fre?.toLocaleString()}</div>` : ''}
+      </div>
+
+      ${data.note ? `<div style="font-size:13px;text-align:center;font-style:italic;margin-bottom:8px;">${data.note}</div>` : ''}
+
+      <div style="border-top:1px dashed #000;padding-top:6px;text-align:center;">
+        <div style="font-size:13px;font-weight:bold;">Mesi paske ou fe pi bon Chwa</div>
+        <div style="font-size:15px;font-weight:bold;">GLOBAL KES PAM</div>
+        <div style="font-size:13px;">Sekirite • Ekonomize • Grandi</div>
+      </div>
+    `;
+
+    window.print();
+  };
+
   const annuleTransaksyon = async (trans, rezon) => {
     if (!rezon) return;
-
     await supabase.from('tranzaksyon').update({
       annule: true,
       annule_pa: user?.name,
@@ -70,43 +117,25 @@ function Transactions({ user, parametres }) {
     const clientDest = clients.find(c => c.num_kont === trans.kont_dest);
 
     if (trans.type === 'Depo' && client) {
-      await supabase.from('kliyan').update({
-        balance: Math.max(0, (client.balance || 0) - trans.montan)
-      }).eq('id', client.id);
+      await supabase.from('kliyan').update({ balance: Math.max(0, (client.balance || 0) - trans.montan) }).eq('id', client.id);
     }
-
     if (trans.type === 'Retre' && client) {
-      await supabase.from('kliyan').update({
-        balance: (client.balance || 0) + trans.montan
-      }).eq('id', client.id);
+      await supabase.from('kliyan').update({ balance: (client.balance || 0) + trans.montan }).eq('id', client.id);
     }
-
     if (trans.type === 'Transfere') {
-      if (client) {
-        await supabase.from('kliyan').update({
-          balance: (client.balance || 0) + trans.montan + (trans.fre || 0)
-        }).eq('id', client.id);
-      }
-      if (clientDest) {
-        await supabase.from('kliyan').update({
-          balance: Math.max(0, (clientDest.balance || 0) - trans.montan)
-        }).eq('id', clientDest.id);
-      }
+      if (client) await supabase.from('kliyan').update({ balance: (client.balance || 0) + trans.montan + (trans.fre || 0) }).eq('id', client.id);
+      if (clientDest) await supabase.from('kliyan').update({ balance: Math.max(0, (clientDest.balance || 0) - trans.montan) }).eq('id', clientDest.id);
     }
-
     if (trans.type === 'Fre Ouveti' && client) {
-      await supabase.from('kliyan').update({
-        balance: (client.balance || 0) + trans.montan
-      }).eq('id', client.id);
+      await supabase.from('kliyan').update({ balance: (client.balance || 0) + trans.montan }).eq('id', client.id);
     }
-
     fetchClients();
     fetchHistorik(searchHistorik);
     alert('✅ Tranzaksyon anile avèk siksè!');
   };
 
   const reenprime = (t) => {
-    setResi({
+    printResi({
       type: t.type === 'Transfere' ? 'TRANSFERE' : t.type === 'Depo' ? 'DEPO' : t.type === 'Retre' ? 'RETRE' : t.type.toUpperCase(),
       ref: t.ref,
       date: new Date(t.created_at).toLocaleDateString('fr-HT') + ' ' + new Date(t.created_at).toLocaleTimeString('fr-HT'),
@@ -120,13 +149,13 @@ function Transactions({ user, parametres }) {
       fre: t.fre || 0,
       deviz: t.deviz || 'HTG',
       note: t.note,
-      color: t.type === 'Depo' ? '#1a5c2a' : t.type === 'Retre' ? '#e74c3c' : '#f39c12',
+      mode: t.mode,
     });
   };
 
   const generateRef = () => 'GKP-' + Date.now().toString().slice(-8);
 
-  const now = () => {
+  const nowStr = () => {
     const d = new Date();
     return d.toLocaleDateString('fr-HT') + ' ' + d.toLocaleTimeString('fr-HT');
   };
@@ -151,13 +180,13 @@ function Transactions({ user, parametres }) {
       branch: user?.branch, kesye: user?.name,
       note: depoNote, ref,
     }]);
-    setResi({
-      type: 'DEPO', ref, date: now(),
+    printResi({
+      type: 'DEPO', ref, date: nowStr(),
       client: depoClient.nom + ' ' + depoClient.prenon,
       numKont: depoClient.num_kont,
       branch: user?.branch, kesye: user?.name,
       montan, deviz: depoClient.deviz,
-      mode: depoMode, note: depoNote, color: '#1a5c2a'
+      mode: depoMode, note: depoNote,
     });
     fetchClients();
     setDepoSearch(''); setDepoClient(null); setDepoAmount(''); setDepoNote('');
@@ -182,13 +211,13 @@ function Transactions({ user, parametres }) {
       branch: user?.branch, kesye: user?.name,
       note: retreNote, ref,
     }]);
-    setResi({
-      type: 'RETRE', ref, date: now(),
+    printResi({
+      type: 'RETRE', ref, date: nowStr(),
       client: retreClient.nom + ' ' + retreClient.prenon,
       numKont: retreClient.num_kont,
       branch: user?.branch, kesye: user?.name,
       montan, deviz: retreClient.deviz,
-      note: retreNote, color: '#e74c3c'
+      note: retreNote,
     });
     fetchClients();
     setRetreSearch(''); setRetreClient(null); setRetreAmount('');
@@ -218,12 +247,12 @@ function Transactions({ user, parametres }) {
       branch: user?.branch, kesye: user?.name,
       note: transNote, ref,
     }]);
-    setResi({
-      type: 'TRANSFERE', ref, date: now(),
+    printResi({
+      type: 'TRANSFERE', ref, date: nowStr(),
       kontSous: transSous, kontDest: transDest,
       branch: user?.branch, kesye: user?.name,
       montan, fre, deviz: 'HTG',
-      note: transNote, color: '#f39c12'
+      note: transNote,
     });
     fetchClients();
     setTransSous(''); setTransDest(''); setTransAmount(''); setTransNote('');
@@ -252,59 +281,8 @@ function Transactions({ user, parametres }) {
     </div>
   );
 
-  const ResiModal = ({ resi, onClose }) => (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-      <div className="resi-print" style={{ background: 'white', borderRadius: '16px', width: '380px', maxHeight: '90vh', boxShadow: '0 25px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ background: resi.color, padding: '20px', textAlign: 'center', color: 'white', flexShrink: 0 }}>
-          <img src={logo} alt="GKP" style={{ width: '65px', height: '65px', objectFit: 'contain', borderRadius: '10px', background: 'white', padding: '4px', marginBottom: '8px' }} />
-          <h3 style={{ margin: '0 0 3px', fontSize: '18px', fontWeight: '800' }}>RESI {resi.type}</h3>
-          <p style={{ margin: 0, opacity: 0.85, fontSize: '12px' }}>Global Kes Pam — GKP</p>
-        </div>
-        <div style={{ padding: '20px', fontFamily: 'monospace', overflowY: 'auto', flex: 1 }}>
-          <div style={{ borderBottom: '2px dashed #eee', paddingBottom: '12px', marginBottom: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '11px', color: '#999' }}>Nimewo Referans</div>
-            <div style={{ fontSize: '16px', fontWeight: '800', color: '#333' }}>{resi.ref}</div>
-            <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>{resi.date}</div>
-          </div>
-          <div style={{ marginBottom: '12px' }}>
-            {resi.type !== 'TRANSFERE' ? (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Kliyan:</span><span style={{ fontWeight: '700' }}>{resi.client}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Nimewo Kont:</span><span style={{ fontWeight: '700' }}>{resi.numKont}</span></div>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Kont Sous:</span><span style={{ fontWeight: '700' }}>{resi.kontSous}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Kont Dest.:</span><span style={{ fontWeight: '700' }}>{resi.kontDest}</span></div>
-              </>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Branch:</span><span style={{ fontWeight: '700' }}>{resi.branch}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Kesye:</span><span style={{ fontWeight: '700' }}>{resi.kesye}</span></div>
-            {resi.mode && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Mod Peman:</span><span style={{ fontWeight: '700' }}>{resi.mode}</span></div>}
-          </div>
-          <div style={{ background: '#f9f9f9', borderRadius: '10px', padding: '15px', textAlign: 'center', marginBottom: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#999', marginBottom: '3px' }}>MONTAN</div>
-            <div style={{ fontSize: '28px', fontWeight: '900', color: resi.color }}>{resi.deviz} {resi.montan?.toLocaleString()}</div>
-            {resi.fre > 0 && <div style={{ fontSize: '12px', color: '#e74c3c', marginTop: '3px' }}>Fre: HTG {resi.fre?.toLocaleString()}</div>}
-          </div>
-          {resi.note && <div style={{ fontSize: '12px', color: '#666', textAlign: 'center', marginBottom: '12px', fontStyle: 'italic' }}>Not: {resi.note}</div>}
-          <div style={{ borderTop: '2px dashed #eee', paddingTop: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a5c2a', marginBottom: '5px' }}>Mesi paske ou fe pi bon Chwa</div>
-            <div style={{ fontSize: '16px', fontWeight: '900', color: '#1a5c2a', marginBottom: '4px' }}>GLOBAL KES PAM</div>
-            <div style={{ fontSize: '12px', color: '#c9a84c', fontWeight: '700', letterSpacing: '1px' }}>Sekirite • Ekonomize • Grandi</div>
-          </div>
-        </div>
-        <div style={{ padding: '15px 20px', display: 'flex', gap: '10px', borderTop: '1px solid #eee', flexShrink: 0 }}>
-          <button onClick={() => window.print()} style={{ flex: 1, padding: '12px', background: resi.color, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>🖨️ Enprime</button>
-          <button onClick={onClose} style={{ flex: 1, padding: '12px', background: '#f0f0f0', color: '#333', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>Femen</button>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif', background: '#f5f5f5', minHeight: '100vh' }}>
-      {resi && <ResiModal resi={resi} onClose={() => setResi(null)} />}
 
       {/* TABS */}
       <div style={{ display: 'flex', marginBottom: '25px', background: 'white', borderRadius: '12px', padding: '5px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', width: 'fit-content' }}>
@@ -442,19 +420,11 @@ function Transactions({ user, parametres }) {
         <div>
           <h2 style={{ margin: '0 0 20px', color: '#333', fontSize: '20px' }}>📜 Histoik Tranzaksyon</h2>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <input
-              value={searchHistorik}
-              onChange={e => setSearchHistorik(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && fetchHistorik(searchHistorik)}
+            <input value={searchHistorik} onChange={e => setSearchHistorik(e.target.value)} onKeyPress={e => e.key === 'Enter' && fetchHistorik(searchHistorik)}
               placeholder="Chèche pa ref, non kliyan, oswa nimewo kont..."
-              style={{ flex: 1, padding: '12px 16px', border: '2px solid #e0e0e0', borderRadius: '10px', fontSize: '14px' }}
-            />
-            <button onClick={() => fetchHistorik(searchHistorik)} style={{ padding: '12px 24px', background: '#9b59b6', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
-              🔍 Chèche
-            </button>
-            <button onClick={() => { setSearchHistorik(''); fetchHistorik(''); }} style={{ padding: '12px 24px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
-              Tout
-            </button>
+              style={{ flex: 1, padding: '12px 16px', border: '2px solid #e0e0e0', borderRadius: '10px', fontSize: '14px' }} />
+            <button onClick={() => fetchHistorik(searchHistorik)} style={{ padding: '12px 24px', background: '#9b59b6', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>🔍 Chèche</button>
+            <button onClick={() => { setSearchHistorik(''); fetchHistorik(''); }} style={{ padding: '12px 24px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>Tout</button>
           </div>
 
           {loadingHistorik ? (

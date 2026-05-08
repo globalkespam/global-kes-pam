@@ -11,22 +11,9 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
-font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
 
 @media print {
-  body * { visibility: hidden; }
-  .resi-print, .resi-print * { visibility: visible; }
-  .resi-print {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 80mm;
-    margin: 0;
-    padding: 0;
-  }
-  @page {
-    size: 80mm auto;
-    margin: 0mm;
-  }
+  body > * { display: none !important; }
+  #resi-direct-print { display: block !important; }
+  @page { margin: 5mm; }
 }
