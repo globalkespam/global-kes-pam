@@ -15,5 +15,18 @@ code {
 @media print {
   body > * { display: none !important; }
   #resi-direct-print { display: block !important; }
-  @page { margin: 5mm; }
+
+  #resi-direct-print {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 2mm !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    font-size: 12pt !important;
+    color: #000 !important;
+  }
+
+  @page {
+    size: portrait;
+    margin: 3mm;
+  }
 }

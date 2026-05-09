@@ -2,44 +2,56 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 
 function ResiOuveti({ resi, onClose }) {
+  useEffect(() => {
+    const printDiv = document.getElementById('resi-direct-print');
+    if (!printDiv) return;
+
+    const row = (label, value) =>
+      `<tr>
+        <td style="padding:3px 4px;font-size:13px;color:#000;">${label}</td>
+        <td style="padding:3px 4px;font-size:13px;font-weight:bold;color:#000;text-align:right;">${value}</td>
+      </tr>`;
+
+    printDiv.innerHTML = `
+      <div style="text-align:center;margin-bottom:8px;">
+        <img src="${resi.logoSrc}" style="width:100px;height:100px;object-fit:contain;" />
+        <div style="font-size:16px;font-weight:bold;margin-top:3px;">RESI OUVETI KONT</div>
+        <div style="font-size:13px;">Global Kes Pam — GKP</div>
+      </div>
+      <div style="border-top:1px dashed #000;border-bottom:1px dashed #000;padding:5px 0;margin-bottom:8px;text-align:center;">
+        <div style="font-size:13px;">Nimewo Referans</div>
+        <div style="font-size:14px;font-weight:bold;">${resi.ref}</div>
+        <div style="font-size:13px;">${resi.date}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+        ${row('Nom du Compte:', resi.client)}
+        ${row('Nimewo Kont:', resi.numKont)}
+        ${row('Branch:', resi.branch)}
+        ${row('Kesye:', resi.kesye)}
+        ${row('Depo Inisyal:', resi.deviz + ' ' + resi.depoInisyal?.toLocaleString())}
+        ${row('Fre Ouveti:', '-' + resi.deviz + ' ' + resi.fre?.toLocaleString())}
+        
+        </table>
+      <div style="border:1px solid #000;padding:8px;text-align:center;margin-bottom:8px;">
+        <div style="font-size:13px;">BALANS DISPONIB</div>
+        <div style="font-size:22px;font-weight:bold;">${resi.deviz} ${resi.montan?.toLocaleString()}</div>
+      </div>
+      <div style="border-top:1px dashed #000;padding-top:6px;text-align:center;">
+        <div style="font-size:13px;font-weight:bold;">Mesi paske ou fe pi bon Chwa</div>
+        <div style="font-size:15px;font-weight:bold;">GLOBAL KES PAM</div>
+        <div style="font-size:13px;">Sekirite • Ekonomize • Grandi</div>
+      </div>
+    `;
+
+    window.print();
+  }, [resi]);
+
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-      <div className="resi-print" style={{ background: 'white', borderRadius: '16px', width: '380px', maxHeight: '90vh', boxShadow: '0 25px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ background: resi.color, padding: '20px', textAlign: 'center', color: 'white', flexShrink: 0 }}>
-          <h3 style={{ margin: '0 0 3px', fontSize: '18px', fontWeight: '800' }}>RESI {resi.type}</h3>
-          <p style={{ margin: 0, opacity: 0.85, fontSize: '12px' }}>Global Kes Pam — GKP</p>
-        </div>
-        <div style={{ padding: '20px', fontFamily: 'monospace', overflowY: 'auto', flex: 1 }}>
-          <div style={{ borderBottom: '2px dashed #eee', paddingBottom: '12px', marginBottom: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '11px', color: '#999' }}>Nimewo Referans</div>
-            <div style={{ fontSize: '16px', fontWeight: '800', color: '#333' }}>{resi.ref}</div>
-            <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>{resi.date}</div>
-          </div>
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Kliyan:</span><span style={{ fontWeight: '700' }}>{resi.client}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Nimewo Kont:</span><span style={{ fontWeight: '700' }}>{resi.numKont}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Branch:</span><span style={{ fontWeight: '700' }}>{resi.branch}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Kesye:</span><span style={{ fontWeight: '700' }}>{resi.kesye}</span></div>
-          </div>
-          <div style={{ background: '#f9f9f9', borderRadius: '10px', padding: '15px', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#999' }}>Depo Inisyal:</span><span style={{ fontWeight: '700' }}>{resi.deviz} {resi.depoInisyal?.toLocaleString()}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#e74c3c' }}>Fre Ouveti:</span><span style={{ fontWeight: '700', color: '#e74c3c' }}>-{resi.deviz} {resi.fre?.toLocaleString()}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}><span style={{ color: '#e67e22' }}>Reserve Bloke:</span><span style={{ fontWeight: '700', color: '#e67e22' }}>HTG {resi.reserve?.toLocaleString()}</span></div>
-            <div style={{ borderTop: '1px dashed #ddd', paddingTop: '8px', marginTop: '8px', display: 'flex', justifyContent: 'space-between', fontSize: '15px' }}>
-              <span style={{ fontWeight: '700' }}>Balans Disponib:</span>
-              <span style={{ fontWeight: '900', color: '#1a5c2a' }}>{resi.deviz} {resi.montan?.toLocaleString()}</span>
-            </div>
-          </div>
-          <div style={{ borderTop: '2px dashed #eee', paddingTop: '12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a5c2a', marginBottom: '5px' }}>Mesi paske ou fe pi bon Chwa</div>
-            <div style={{ fontSize: '16px', fontWeight: '900', color: '#1a5c2a', marginBottom: '4px' }}>GLOBAL KES PAM</div>
-            <div style={{ fontSize: '12px', color: '#c9a84c', fontWeight: '700', letterSpacing: '1px' }}>Sekirite • Ekonomize • Grandi</div>
-          </div>
-        </div>
-        <div style={{ padding: '15px 20px', display: 'flex', gap: '10px', borderTop: '1px solid #eee', flexShrink: 0 }}>
-          <button onClick={() => window.print()} style={{ flex: 1, padding: '12px', background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>🖨️ Enprime</button>
-          <button onClick={onClose} style={{ flex: 1, padding: '12px', background: '#f0f0f0', color: '#333', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>Femen</button>
-        </div>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: 'white', borderRadius: '16px', padding: '30px', textAlign: 'center', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontSize: '40px', marginBottom: '15px' }}>🖨️</div>
+        <p style={{ color: '#1a5c2a', fontWeight: '700', marginBottom: '20px' }}>Resi ap enprime...</p>
+        <button onClick={onClose} style={{ background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', padding: '10px 25px', cursor: 'pointer', fontWeight: '700' }}>Femen</button>
       </div>
     </div>
   );
@@ -54,7 +66,7 @@ function Clients({ user, kesyeOnly, parametres, branches }) {
   const [search, setSearch] = useState('');
   const [isJoint, setIsJoint] = useState(false);
   const [resi, setResi] = useState(null);
-
+const [showEdit, setShowEdit] = useState(null);
   const isAdmin = user?.role === 'Admin';
 
   const [form, setForm] = useState({
@@ -94,8 +106,8 @@ function Clients({ user, kesyeOnly, parametres, branches }) {
     const reserve = parametres.reserve_kont || 500;
     const depoInisyal = parseFloat(form.depoInisyal) || 0;
 
-    if (depoInisyal < fre + reserve) {
-      alert('Depo inisyal dwe omwen ' + form.deviz + ' ' + (fre + reserve) + '\n(Fre: ' + fre + ' + Reserve: ' + reserve + ')');
+    if (depoInisyal < fre) {
+      alert('Depo inisyal dwe omwen ' + form.deviz + ' ' + fre + ' (Fre ouveti)');
       return;
     }
 
@@ -153,7 +165,7 @@ function Clients({ user, kesyeOnly, parametres, branches }) {
       type: 'Depo',
       num_kont: numKont,
       client: form.nom + ' ' + form.prenon,
-      montan: balans,
+      montan: balans || 0,
       deviz: form.deviz,
       branch: form.branch || user?.branch,
       kesye: user?.name,
@@ -173,13 +185,14 @@ function Clients({ user, kesyeOnly, parametres, branches }) {
 
     setResi({
       type: 'OUVETI KONT',
+      logoSrc: require('../assets/logo.jpeg.jpeg'),
       ref: 'GKP-OUV-' + Date.now().toString().slice(-8),
       date: new Date().toLocaleDateString('fr-HT') + ' ' + new Date().toLocaleTimeString('fr-HT'),
       client: nomKliyan,
       numKont: numKont,
       branch: branchKliyan,
       kesye: user?.name,
-      montan: balans - reserve,
+      montan: balans,
       deviz: form.deviz,
       fre: fre,
       reserve: reserve,
@@ -343,7 +356,7 @@ function Clients({ user, kesyeOnly, parametres, branches }) {
                 <div>💰 Depo: <strong>{form.deviz} {parseFloat(form.depoInisyal || 0).toLocaleString()}</strong></div>
                 <div>💳 Fre: <strong>-{form.deviz} {getFreOuveti(form.deviz)}</strong></div>
                 <div>🔒 Bloke: <strong>HTG {parametres.reserve_kont || 500}</strong></div>
-                <div>✅ Disponib: <strong>{form.deviz} {Math.max(0, parseFloat(form.depoInisyal || 0) - getFreOuveti(form.deviz) - (parametres.reserve_kont || 500)).toLocaleString()}</strong></div>
+                <div>✅ Disponib: <strong>{form.deviz} {Math.max(0, parseFloat(form.depoInisyal || 0) - getFreOuveti(form.deviz) - (parametres.reserve_kont || 500)).toLocaleString()} (apre 500 bloke)</strong></div>
               </div>
               <div style={{ marginTop: '10px', fontSize: '15px', fontWeight: '800', color: '#1a5c2a' }}>
                 Balans Total (enkli bloke): {form.deviz} {Math.max(0, parseFloat(form.depoInisyal || 0) - getFreOuveti(form.deviz)).toLocaleString()}
@@ -402,7 +415,12 @@ function Clients({ user, kesyeOnly, parametres, branches }) {
           <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '620px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ margin: 0, color: '#1a5c2a' }}>Detay Kliyan</h2>
-              <button onClick={() => { setShowDetail(null); setShowPin(false); }} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', cursor: 'pointer', fontWeight: '700' }}>Femen</button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+  {isAdmin && (
+    <button onClick={() => setShowEdit(showDetail)} style={{ background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', cursor: 'pointer', fontWeight: '700' }}>✏️ Modifye</button>
+  )}
+  <button onClick={() => { setShowDetail(null); setShowPin(false); }} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', cursor: 'pointer', fontWeight: '700' }}>Femen</button>
+</div>
             </div>
 
             <div style={{ background: showDetail.status === 'Bloke' ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '12px', padding: '20px', color: 'white', marginBottom: '20px', textAlign: 'center' }}>
@@ -542,7 +560,59 @@ function Clients({ user, kesyeOnly, parametres, branches }) {
           </div>
         </div>
       )}
-
+{/* EDIT MODAL */}
+{showEdit && (
+  <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
+    <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2 style={{ margin: 0, color: '#1a5c2a' }}>✏️ Modifye Kliyan</h2>
+        <button onClick={() => setShowEdit(null)} style={{ background: '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 15px', cursor: 'pointer', fontWeight: '700' }}>Femen</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+        {[
+          { label: 'Non', key: 'nom' },
+          { label: 'Prenon', key: 'prenon' },
+          { label: 'Telefon', key: 'phone' },
+          { label: 'Email', key: 'email' },
+          { label: 'Adres', key: 'adres' },
+          { label: 'NIF/CIN', key: 'nif' },
+        ].map((item, i) => (
+          <div key={i}>
+            <label style={labelStyle}>{item.label}</label>
+            <input
+              value={showEdit[item.key] || ''}
+              onChange={e => setShowEdit({...showEdit, [item.key]: e.target.value})}
+              style={inputStyle}
+            />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '10px' }}>
+        <button onClick={async () => {
+          const { error } = await supabase.from('kliyan').update({
+            nom: showEdit.nom,
+            prenon: showEdit.prenon,
+            phone: showEdit.phone,
+            email: showEdit.email,
+            adres: showEdit.adres,
+            nif: showEdit.nif,
+          }).eq('id', showEdit.id);
+          if (!error) {
+            fetchClients();
+            setShowEdit(null);
+            setShowDetail(null);
+            alert('✅ Enfòmasyon kliyan mete ajou!');
+          }
+        }} style={{ flex: 1, background: '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: '700' }}>
+          💾 Sove Chanjman
+        </button>
+        <button onClick={() => setShowEdit(null)} style={{ flex: 1, background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontWeight: '700' }}>
+          Anile
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       {/* SEARCH */}
       <div style={{ marginBottom: '20px' }}>
         <input value={search} onChange={e => setSearch(e.target.value)}

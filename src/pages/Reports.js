@@ -95,7 +95,7 @@ function Reports({ user, branches }) {
 
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
-      <style>{`@media print { .no-print { display: none !important; } @page { size: A4; margin: 15mm; } }`}</style>
+   
 
       {/* HEADER */}
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
@@ -105,9 +105,92 @@ function Reports({ user, branches }) {
             {isAdmin ? 'Rapo detaye pa dat ak branch' : 'Rapo jounen — ' + user?.branch}
           </p>
         </div>
-        <button onClick={() => window.print()} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
-          🖨️ Enprime Rapo
-        </button>
+      <button onClick={() => {
+  const printDiv = document.getElementById('resi-direct-print');
+  if (!printDiv) return;
+
+  printDiv.innerHTML = `
+    <div style="font-family:Arial,sans-serif;width:100%;color:#000;font-size:14px;">
+
+      <div style="text-align:center;margin-bottom:8px;border-bottom:2px solid #000;padding-bottom:6px;">
+        <img src="${logo}" style="width:100px;height:100px;object-fit:contain;" onload="window.print()" onerror="this.style.display='none'" />
+        <div style="font-size:18px;font-weight:bold;">GLOBAL KES PAM</div>
+        <div style="font-size:13px;">GKP Banking System</div>
+        <div style="font-size:13px;">Rapo: ${isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)}</div>
+        <div style="font-size:13px;">Branch: ${isAdmin ? selectedBranch : user?.branch}</div>
+        <div style="font-size:13px;">Prepare pa: ${user?.name}</div>
+      </div>
+
+      <div style="margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:6px;">
+        <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">REZIME</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+          <span>Total Depo:</span><span style="font-weight:bold;">HTG ${totalDepo.toLocaleString()}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+          <span>Total Retre:</span><span style="font-weight:bold;">HTG ${totalRetre.toLocaleString()}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+          <span>Total Transfe:</span><span style="font-weight:bold;">HTG ${totalTransf.toLocaleString()}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+          <span>Peman Pre:</span><span style="font-weight:bold;">HTG ${totalPre.toLocaleString()}</span>
+        </div>
+        ${isAdmin ? `
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+          <span>Benefis Total:</span><span style="font-weight:bold;">HTG ${totalBenefis.toLocaleString()}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+          <span>Kob Bloke:</span><span style="font-weight:bold;">HTG ${kobBloke.toLocaleString()}</span>
+        </div>
+        ` : ''}
+      </div>
+
+      ${isAdmin ? `
+      <div style="margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:6px;">
+        <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">RAPO PA BRANCH</div>
+        ${branchStats.map(b => `
+          <div style="margin-bottom:6px;padding:4px;border:1px solid #ccc;">
+            <div style="font-size:13px;font-weight:bold;">🏦 ${b.name}</div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Depo:</span><span>HTG ${b.depo.toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Retre:</span><span>HTG ${b.retre.toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Transfe:</span><span>HTG ${b.transf.toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Benefis:</span><span>HTG ${b.benefis.toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Tranzaksyon:</span><span>${b.count}</span></div>
+          </div>
+        `).join('')}
+      </div>
+      ` : ''}
+
+      <div style="margin-bottom:8px;">
+        <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">LIS TRANZAKSYON (${transactions.length})</div>
+        ${transactions.map((t, i) => `
+          <div style="border-bottom:1px dotted #ccc;padding:4px 0;margin-bottom:2px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;">
+              <span style="font-weight:bold;">${t.type || ''}</span>
+              <span style="font-weight:bold;">HTG ${(t.montan || 0).toLocaleString()}</span>
+            </div>
+            <div style="font-size:14px;color:#000;font-weight:bold;">${t.client || ''} — ${t.ref || ''}</div>
+<div style="font-size:14px;color:#000;">${t.kesye || ''} — ${new Date(t.created_at).toLocaleDateString('fr-HT')}</div>
+          </div>
+        `).join('')}
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;border-top:2px solid #000;padding-top:4px;margin-top:4px;">
+          <span>TOTAL:</span>
+          <span>HTG ${transactions.reduce((s, t) => s + (t.montan || 0), 0).toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div style="border-top:2px solid #000;padding-top:8px;margin-top:10px;">
+        <div style="font-size:14px;margin-bottom:20px;">Prepare pa: ___________________</div>
+        <div style="font-size:14px;margin-bottom:20px;">Verifye pa: ___________________</div>
+        <div style="font-size:14px;">Apwouve pa: ___________________</div>
+      </div>
+
+    </div>
+  `;
+
+}} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
+  🖨️ Enprime Rapo
+</button>
       </div>
 
       {/* FILTERS */}
