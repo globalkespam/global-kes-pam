@@ -201,6 +201,18 @@ function Reports({ user, branches }) {
         <div className="no-print" style={{ background: 'white', borderRadius: '16px', padding: '25px', marginBottom: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
           <h3 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '15px', fontWeight: '700' }}>Chèche Rapo</h3>
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+  <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>Chèche pa Mwa</label>
+  <input type="month" onChange={e => {
+    if (e.target.value) {
+      const [year, month] = e.target.value.split('-');
+      const firstDay = year + '-' + month + '-01';
+      const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
+      setDateFrom(firstDay);
+      setDateTo(lastDay);
+    }
+  }} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
+</div>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>De Dat</label>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
