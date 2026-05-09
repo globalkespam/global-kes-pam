@@ -123,8 +123,11 @@ function Reports({ user, branches }) {
 
       <div style="margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:6px;">
         <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">REZIME</div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
           <span>Total Depo:</span><span style="font-weight:bold;">HTG ${totalDepo.toLocaleString()}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
+          <span>Fre Ouveti Kont:</span><span style="font-weight:bold;">HTG ${totalFreOuveti.toLocaleString()}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
           <span>Total Retre:</span><span style="font-weight:bold;">HTG ${totalRetre.toLocaleString()}</span>
