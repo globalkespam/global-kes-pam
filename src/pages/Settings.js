@@ -252,17 +252,66 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
                     <div>
                       <label style={labelStyle}>Le Louveti</label>
-                      <input type="time" value={ore.louvri} onChange={e => setOreKes({ ...oreKes, [branch.nom]: { ...ore, louvri: e.target.value } })} style={inputStyle} />
-<div style={{ fontSize: '12px', color: '#1a5c2a', marginTop: '3px', fontWeight: '600' }}>
-  {ore.louvri ? (parseInt(ore.louvri.split(':')[0]) >= 12 ? ore.louvri + ' PM' : ore.louvri + ' AM') : ''}
-</div>
+                      <div>
+                      <label style={labelStyle}>Le Louveti</label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <select value={(() => { const h = parseInt((ore.louvri || '07:00').split(':')[0]); return (h % 12 || 12).toString(); })()} onChange={e => {
+                          const cur = ore.louvri || '07:00';
+                          const isPM = parseInt(cur.split(':')[0]) >= 12;
+                          const h24 = isPM ? (parseInt(e.target.value) % 12) + 12 : parseInt(e.target.value) % 12;
+                          const m = cur.split(':')[1];
+                          setOreKes({ ...oreKes, [branch.nom]: { ...ore, louvri: String(h24).padStart(2,'0') + ':' + m } });
+                        }} style={{ ...inputStyle, width: '70px' }}>
+                          {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                        <select value={(ore.louvri || '07:00').split(':')[1]} onChange={e => {
+                          const h = (ore.louvri || '07:00').split(':')[0];
+                          setOreKes({ ...oreKes, [branch.nom]: { ...ore, louvri: h + ':' + e.target.value } });
+                        }} style={{ ...inputStyle, width: '70px' }}>
+                          {['00','15','30','45'].map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select value={parseInt((ore.louvri || '07:00').split(':')[0]) >= 12 ? 'PM' : 'AM'} onChange={e => {
+                          const cur = ore.louvri || '07:00';
+                          const h12 = parseInt(cur.split(':')[0]) % 12;
+                          const h24 = e.target.value === 'PM' ? h12 + 12 : h12;
+                          const m = cur.split(':')[1];
+                          setOreKes({ ...oreKes, [branch.nom]: { ...ore, louvri: String(h24).padStart(2,'0') + ':' + m } });
+                        }} style={{ ...inputStyle, width: '70px' }}>
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                    </div>
                     </div>
                     <div>
                       <label style={labelStyle}>Le Femti</label>
-                      <input type="time" value={ore.femen} onChange={e => setOreKes({ ...oreKes, [branch.nom]: { ...ore, femen: e.target.value } })} style={inputStyle} />
-<div style={{ fontSize: '12px', color: '#1a5c2a', marginTop: '3px', fontWeight: '600' }}>
-  {ore.femen ? (parseInt(ore.femen.split(':')[0]) >= 12 ? ore.femen + ' PM' : ore.femen + ' AM') : ''}
-</div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <select value={(() => { const h = parseInt((ore.femen || '20:00').split(':')[0]); return (h % 12 || 12).toString(); })()} onChange={e => {
+                          const cur = ore.femen || '20:00';
+                          const isPM = parseInt(cur.split(':')[0]) >= 12;
+                          const h24 = isPM ? (parseInt(e.target.value) % 12) + 12 : parseInt(e.target.value) % 12;
+                          const m = cur.split(':')[1];
+                          setOreKes({ ...oreKes, [branch.nom]: { ...ore, femen: String(h24).padStart(2,'0') + ':' + m } });
+                        }} style={{ ...inputStyle, width: '70px' }}>
+                          {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                        <select value={(ore.femen || '20:00').split(':')[1]} onChange={e => {
+                          const h = (ore.femen || '20:00').split(':')[0];
+                          setOreKes({ ...oreKes, [branch.nom]: { ...ore, femen: h + ':' + e.target.value } });
+                        }} style={{ ...inputStyle, width: '70px' }}>
+                          {['00','15','30','45'].map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select value={parseInt((ore.femen || '20:00').split(':')[0]) >= 12 ? 'PM' : 'AM'} onChange={e => {
+                          const cur = ore.femen || '20:00';
+                          const h12 = parseInt(cur.split(':')[0]) % 12;
+                          const h24 = e.target.value === 'PM' ? h12 + 12 : h12;
+                          const m = cur.split(':')[1];
+                          setOreKes({ ...oreKes, [branch.nom]: { ...ore, femen: String(h24).padStart(2,'0') + ':' + m } });
+                        }} style={{ ...inputStyle, width: '70px' }}>
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                   <div style={{ marginBottom: '15px' }}>

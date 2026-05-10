@@ -10,6 +10,8 @@ function Reports({ user, branches }) {
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
   const [selectedBranch, setSelectedBranch] = useState(isAdmin ? 'Tout Branch' : user?.branch);
+  const [selectedKesye, setSelectedKesye] = useState('Tout Kesye');
+  const [kesyeList, setKesyeList] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [benefisData, setBenefisData] = useState([]);
   const [kliyanData, setKliyanData] = useState([]);
@@ -18,10 +20,24 @@ function Reports({ user, branches }) {
   const branchOptions = ['Tout Branch', ...(branches && branches.length > 0 ? branches.map(b => b.nom) : [])];
   const branchList = branches && branches.length > 0 ? branches.map(b => b.nom) : [];
 
+  // ✅ Chaje lis kesye lè branch chanje
+  useEffect(() => {
+    if (isAdmin) fetchKesyeList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranch]);
+
   useEffect(() => {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, selectedBranch]);
+  }, [dateFrom, dateTo, selectedBranch, selectedKesye]);
+
+  const fetchKesyeList = async () => {
+    let query = supabase.from('itilizate').select('name, branch').eq('role', 'Kesye');
+    if (selectedBranch !== 'Tout Branch') query = query.eq('branch', selectedBranch);
+    const { data } = await query;
+    setKesyeList(data || []);
+    setSelectedKesye('Tout Kesye');
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -31,8 +47,11 @@ function Reports({ user, branches }) {
     if (isAdmin) {
       query = query.gte('created_at', dateFrom + 'T00:00:00').lte('created_at', dateTo + 'T23:59:59+00:00');
       if (selectedBranch !== 'Tout Branch') query = query.eq('branch', selectedBranch);
+      // ✅ Filtre pa kesye si chwazi
+      if (selectedKesye !== 'Tout Kesye') query = query.eq('kesye', selectedKesye);
     } else {
-      query = query.eq('branch', user?.branch);
+      // ✅ Kesye wè sèlman pwòp tranzaksyon pa li
+      query = query.eq('branch', user?.branch).eq('kesye', user?.name);
     }
 
     const { data: transData } = await query;
@@ -42,8 +61,10 @@ function Reports({ user, branches }) {
     if (isAdmin) {
       benefisQuery = benefisQuery.gte('created_at', dateFrom).lte('created_at', dateTo + 'T23:59:59');
       if (selectedBranch !== 'Tout Branch') benefisQuery = benefisQuery.eq('branch', selectedBranch);
+      if (selectedKesye !== 'Tout Kesye') benefisQuery = benefisQuery.eq('kesye', selectedKesye);
     } else {
-      benefisQuery = benefisQuery.eq('branch', user?.branch);
+      // ✅ Kesye wè sèlman frè ouveti pa li — pa tout branch
+      benefisQuery = benefisQuery.eq('branch', user?.branch).eq('kesye', user?.name);
     }
     const { data: benData } = await benefisQuery;
     setBenefisData(benData || []);
@@ -54,53 +75,28 @@ function Reports({ user, branches }) {
     setLoading(false);
   };
 
-  // ✅ Kalkil kòrèkt — Valid sèlman (pa retire de total, jis pran valid)
-  const totalDepo = transactions
-    .filter(t => t.type === 'Depo' && !t.annule)
-    .reduce((s, t) => s + (t.montan || 0), 0);
-
-  const totalRetre = transactions
-    .filter(t => t.type === 'Retre' && !t.annule)
-    .reduce((s, t) => s + (t.montan || 0), 0);
-
-  const totalTransf = transactions
-    .filter(t => t.type === 'Transfere' && !t.annule)
-    .reduce((s, t) => s + (t.montan || 0), 0);
-
-  const totalPre = transactions
-    .filter(t => t.type === 'Peman Pre' && !t.annule)
-    .reduce((s, t) => s + (t.montan || 0), 0);
-
-  const totalFreOuveti = benefisData
-    .filter(b => b.type === 'Fre Ouveti Kont')
-    .reduce((s, b) => s + (b.montan || 0), 0);
-
-  // Anile — kantite ak montan total
+  // ✅ Kalkil kòrèkt — Valid sèlman
+  const totalDepo = transactions.filter(t => t.type === 'Depo' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0);
+  const totalRetre = transactions.filter(t => t.type === 'Retre' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0);
+  const totalTransf = transactions.filter(t => t.type === 'Transfere' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0);
+  const totalPre = transactions.filter(t => t.type === 'Peman Pre' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0);
+  const totalFreOuveti = benefisData.filter(b => b.type === 'Fre Ouveti Kont').reduce((s, b) => s + (b.montan || 0), 0);
   const totalAnile = transactions.filter(t => t.annule).length;
-  const montanAnile = transactions
-    .filter(t => t.annule)
-    .reduce((s, t) => s + (t.montan || 0), 0);
-
-  // Rantre = Depo valid + Fre Ouveti + Peman Pre
+  const montanAnile = transactions.filter(t => t.annule).reduce((s, t) => s + (t.montan || 0), 0);
   const rantre = totalDepo + totalFreOuveti + totalPre;
-
-  // Soti = Retre valid + Transfe valid
   const soti = totalRetre + totalTransf;
-
-  // Balans = Rantre - Soti
   const balansKes = rantre - soti;
   const totalEntere = benefisData.filter(b => b.type === 'Enterè Prè').reduce((s, b) => s + (b.montan || 0), 0);
   const totalPenalite = benefisData.filter(b => b.type === 'Penalite Prè').reduce((s, b) => s + (b.montan || 0), 0);
   const totalBenefis = totalFreOuveti + totalEntere + totalPenalite;
-
   const kobBloke = kliyanData.reduce((s, k) => s + (k.reserve || 500), 0);
 
   const branchStats = branchList.map(b => ({
     name: b,
-    depo: transactions.filter(t => t.branch === b && t.type === 'Depo').reduce((s, t) => s + (t.montan || 0), 0),
-    retre: transactions.filter(t => t.branch === b && t.type === 'Retre').reduce((s, t) => s + (t.montan || 0), 0),
-    transf: transactions.filter(t => t.branch === b && t.type === 'Transfere').reduce((s, t) => s + (t.montan || 0), 0),
-    pre: transactions.filter(t => t.branch === b && t.type === 'Peman Pre').reduce((s, t) => s + (t.montan || 0), 0),
+    depo: transactions.filter(t => t.branch === b && t.type === 'Depo' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0),
+    retre: transactions.filter(t => t.branch === b && t.type === 'Retre' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0),
+    transf: transactions.filter(t => t.branch === b && t.type === 'Transfere' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0),
+    pre: transactions.filter(t => t.branch === b && t.type === 'Peman Pre' && !t.annule).reduce((s, t) => s + (t.montan || 0), 0),
     benefis: benefisData.filter(b2 => b2.branch === b).reduce((s, b2) => s + (b2.montan || 0), 0),
     count: transactions.filter(t => t.branch === b).length,
   }));
@@ -113,157 +109,157 @@ function Reports({ user, branches }) {
     return '#f39c12';
   };
 
+  // ✅ Ore lokal aparèy — pa gen ajisteman manual
   const formatDate = (d) => {
-  if (!d) return '';
-  try {
-    if (d.includes('T')) return new Date(d).toLocaleDateString('fr-HT');
-    return new Date(d + 'T12:00:00').toLocaleDateString('fr-HT');
-  } catch { return d; }
-};
-  const formatTime = (d) => { if (!d) return ''; return new Date(d).toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' }); };
+    if (!d) return '';
+    try {
+      return new Date(d).toLocaleDateString('fr-HT');
+    } catch { return d; }
+  };
+  const formatTime = (d) => {
+    if (!d) return '';
+    return new Date(d).toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Tit rapò pou enpresyon
+  const rapòTit = isAdmin
+    ? (selectedKesye !== 'Tout Kesye' ? 'Kesye: ' + selectedKesye : selectedBranch)
+    : 'Kesye: ' + user?.name;
 
   return (
     <div style={{ padding: '30px', fontFamily: 'Segoe UI, sans-serif' }}>
-   
 
       {/* HEADER */}
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
         <div>
           <h1 style={{ margin: 0, color: '#1a5c2a', fontSize: '24px', fontWeight: '800' }}>Rapo Jounen</h1>
           <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>
-            {isAdmin ? 'Rapo detaye pa dat ak branch' : 'Rapo jounen — ' + user?.branch}
+            {isAdmin ? 'Rapo detaye pa dat, branch ak kesye' : 'Rapo pa — ' + user?.name + ' | ' + user?.branch}
           </p>
         </div>
-      <button onClick={() => {
-  const printDiv = document.getElementById('resi-direct-print');
-  if (!printDiv) return;
-
-  printDiv.innerHTML = `
-    <div style="font-family:Arial,sans-serif;width:100%;color:#000;font-size:14px;">
-
-      <div style="text-align:center;margin-bottom:8px;border-bottom:2px solid #000;padding-bottom:6px;">
-        <img src="${logo}" style="width:100px;height:100px;object-fit:contain;" onload="window.print()" onerror="this.style.display='none'" />
-        <div style="font-size:18px;font-weight:bold;">GLOBAL KES PAM</div>
-        <div style="font-size:13px;">GKP Banking System</div>
-        <div style="font-size:13px;">Rapo: ${isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)}</div>
-        <div style="font-size:13px;">Branch: ${isAdmin ? selectedBranch : user?.branch}</div>
-        <div style="font-size:13px;">Prepare pa: ${user?.name}</div>
-      </div>
-
-      <div style="margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:6px;">
-        <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">REZIME</div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
-          <span>Total Depo:</span><span style="font-weight:bold;">HTG ${totalDepo.toLocaleString()}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
-          <span>Fre Ouveti Kont:</span><span style="font-weight:bold;">HTG ${totalFreOuveti.toLocaleString()}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
-          <span>Total Retre:</span><span style="font-weight:bold;">HTG ${totalRetre.toLocaleString()}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
-          <span>Total Transfe:</span><span style="font-weight:bold;">HTG ${totalTransf.toLocaleString()}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
-          <span>Peman Pre:</span><span style="font-weight:bold;">HTG ${totalPre.toLocaleString()}</span>
-        </div>
-        ${isAdmin ? `
-        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
-          <span>Benefis Total:</span><span style="font-weight:bold;">HTG ${totalBenefis.toLocaleString()}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
-          <span>Kob Bloke:</span><span style="font-weight:bold;">HTG ${kobBloke.toLocaleString()}</span>
-        </div>
-        ` : ''}
-        <div style="border-top:1px solid #000;margin-top:8px;padding-top:8px;">
-          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
-            <span>ANILE (${totalAnile} tranzaksyon):</span>
-            <span style="font-weight:bold;">HTG ${montanAnile.toLocaleString()}</span>
-          </div>
-          <div style="height:1px;background:#ccc;margin:6px 0;"></div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
-            <span>KOB RANTRE:</span>
-            <span style="font-weight:bold;">HTG ${rantre.toLocaleString()}</span>
-          </div>
-          <div style="font-size:10px;color:#000;padding:1px 0 5px 6px;">Depo + Fre Ouveti + Peman Pre</div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
-            <span>KOB SOTI:</span>
-            <span style="font-weight:bold;">HTG ${soti.toLocaleString()}</span>
-          </div>
-          <div style="font-size:10px;color:#000;padding:1px 0 5px 6px;">Retre + Transfe</div>
-          <div style="height:2px;background:#000;margin:6px 0;"></div>
-          <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:bold;padding:4px 0;">
-            <span>BALANS KES:</span>
-            <span>${balansKes >= 0 ? '+' : ''}HTG ${balansKes.toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-
-      ${isAdmin ? `
-      <div style="margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:6px;">
-        <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">RAPO PA BRANCH</div>
-        ${branchStats.map(b => `
-          <div style="margin-bottom:6px;padding:4px;border:1px solid #ccc;">
-            <div style="font-size:13px;font-weight:bold;">🏦 ${b.name}</div>
-            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Depo:</span><span>HTG ${b.depo.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Retre:</span><span>HTG ${b.retre.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Transfe:</span><span>HTG ${b.transf.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Benefis:</span><span>HTG ${b.benefis.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Tranzaksyon:</span><span>${b.count}</span></div>
-          </div>
-        `).join('')}
-      </div>
-      ` : ''}
-
-      <div style="margin-bottom:8px;">
-        <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">LIS TRANZAKSYON (${transactions.length})</div>
-        ${transactions.map((t, i) => `
-          <div style="border-bottom:1px dotted #ccc;padding:4px 0;margin-bottom:2px;">
-            <div style="display:flex;justify-content:space-between;font-size:13px;">
-              <span style="font-weight:bold;">${t.type || ''}</span>
-              <span style="font-weight:bold;">HTG ${(t.montan || 0).toLocaleString()}</span>
+        <button onClick={() => {
+          const printDiv = document.getElementById('resi-direct-print');
+          if (!printDiv) return;
+          printDiv.innerHTML = `
+            <div style="font-family:Arial,sans-serif;width:100%;color:#000;font-size:14px;">
+              <div style="text-align:center;margin-bottom:8px;border-bottom:2px solid #000;padding-bottom:6px;">
+                <img src="${logo}" style="width:100px;height:100px;object-fit:contain;" onload="window.print()" onerror="this.style.display='none'" />
+                <div style="font-size:18px;font-weight:bold;">GLOBAL KES PAM</div>
+                <div style="font-size:13px;">GKP Banking System</div>
+                <div style="font-size:13px;">Rapo: ${isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)}</div>
+                <div style="font-size:13px;">Branch: ${isAdmin ? selectedBranch : user?.branch}</div>
+                <div style="font-size:13px;">Kesye: ${isAdmin ? selectedKesye : user?.name}</div>
+                <div style="font-size:13px;">Prepare pa: ${user?.name}</div>
+              </div>
+              <div style="margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:6px;">
+                <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">REZIME</div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
+                  <span>Total Depo:</span><span style="font-weight:bold;">HTG ${totalDepo.toLocaleString()}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
+                  <span>Fre Ouveti Kont:</span><span style="font-weight:bold;">HTG ${totalFreOuveti.toLocaleString()}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+                  <span>Total Retre:</span><span style="font-weight:bold;">HTG ${totalRetre.toLocaleString()}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+                  <span>Total Transfe:</span><span style="font-weight:bold;">HTG ${totalTransf.toLocaleString()}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+                  <span>Peman Pre:</span><span style="font-weight:bold;">HTG ${totalPre.toLocaleString()}</span>
+                </div>
+                ${isAdmin ? `
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
+                  <span>Benefis Total:</span><span style="font-weight:bold;">HTG ${totalBenefis.toLocaleString()}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
+                  <span>Kob Bloke:</span><span style="font-weight:bold;">HTG ${kobBloke.toLocaleString()}</span>
+                </div>
+                ` : ''}
+                <div style="border-top:1px solid #000;margin-top:8px;padding-top:8px;">
+                  <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+                    <span>ANILE (${totalAnile} tranzaksyon):</span>
+                    <span style="font-weight:bold;">HTG ${montanAnile.toLocaleString()}</span>
+                  </div>
+                  <div style="height:1px;background:#ccc;margin:6px 0;"></div>
+                  <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+                    <span>KOB RANTRE:</span>
+                    <span style="font-weight:bold;">HTG ${rantre.toLocaleString()}</span>
+                  </div>
+                  <div style="font-size:10px;color:#000;padding:1px 0 5px 6px;">Depo + Fre Ouveti + Peman Pre</div>
+                  <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+                    <span>KOB SOTI:</span>
+                    <span style="font-weight:bold;">HTG ${soti.toLocaleString()}</span>
+                  </div>
+                  <div style="font-size:10px;color:#000;padding:1px 0 5px 6px;">Retre + Transfe</div>
+                  <div style="height:2px;background:#000;margin:6px 0;"></div>
+                  <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:bold;padding:4px 0;">
+                    <span>BALANS KES:</span>
+                    <span>${balansKes >= 0 ? '+' : ''}HTG ${balansKes.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+              ${isAdmin ? `
+              <div style="margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:6px;">
+                <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">RAPO PA BRANCH</div>
+                ${branchStats.map(b => `
+                  <div style="margin-bottom:6px;padding:4px;border:1px solid #ccc;">
+                    <div style="font-size:13px;font-weight:bold;">${b.name}</div>
+                    <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Depo:</span><span>HTG ${b.depo.toLocaleString()}</span></div>
+                    <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Retre:</span><span>HTG ${b.retre.toLocaleString()}</span></div>
+                    <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Transfe:</span><span>HTG ${b.transf.toLocaleString()}</span></div>
+                    <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Benefis:</span><span>HTG ${b.benefis.toLocaleString()}</span></div>
+                    <div style="display:flex;justify-content:space-between;font-size:14px;"><span>Tranzaksyon:</span><span>${b.count}</span></div>
+                  </div>
+                `).join('')}
+              </div>
+              ` : ''}
+              <div style="margin-bottom:8px;">
+                <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">LIS TRANZAKSYON (${transactions.length})</div>
+                ${transactions.map(t => `
+                  <div style="border-bottom:1px dotted #ccc;padding:4px 0;margin-bottom:2px;${t.annule ? 'opacity:0.6;' : ''}">
+                    <div style="display:flex;justify-content:space-between;font-size:13px;">
+                      <span style="font-weight:bold;">${t.annule ? '[ANILE] ' : ''}${t.type || ''}</span>
+                      <span style="font-weight:bold;${t.annule ? 'text-decoration:line-through;' : ''}">HTG ${(t.montan || 0).toLocaleString()}</span>
+                    </div>
+                    <div style="font-size:13px;color:#000;font-weight:bold;">${t.client || ''} — ${t.ref || ''}</div>
+                    <div style="font-size:13px;color:#000;">${t.kesye || ''} — ${new Date(t.created_at).toLocaleDateString('fr-HT')} ${new Date(t.created_at).toLocaleTimeString('fr-HT', {hour:'2-digit',minute:'2-digit'})}</div>
+                  </div>
+                `).join('')}
+                <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;border-top:2px solid #000;padding-top:4px;margin-top:4px;">
+                  <span>TOTAL VALID:</span>
+                  <span>HTG ${(totalDepo + totalRetre + totalTransf + totalPre).toLocaleString()}</span>
+                </div>
+              </div>
+              <div style="border-top:2px solid #000;padding-top:8px;margin-top:10px;">
+                <div style="font-size:14px;margin-bottom:20px;">Prepare pa: ___________________</div>
+                <div style="font-size:14px;margin-bottom:20px;">Verifye pa: ___________________</div>
+                <div style="font-size:14px;">Apwouve pa: ___________________</div>
+              </div>
             </div>
-            <div style="font-size:14px;color:#000;font-weight:bold;">${t.client || ''} — ${t.ref || ''}</div>
-<div style="font-size:14px;color:#000;">${t.kesye || ''} — ${new Date(t.created_at).toLocaleDateString('fr-HT')}</div>
-          </div>
-        `).join('')}
-        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;border-top:2px solid #000;padding-top:4px;margin-top:4px;">
-          <span>TOTAL:</span>
-          <span>HTG ${transactions.reduce((s, t) => s + (t.montan || 0), 0).toLocaleString()}</span>
-        </div>
+          `;
+        }} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
+          🖨️ Enprime Rapo
+        </button>
       </div>
 
-      <div style="border-top:2px solid #000;padding-top:8px;margin-top:10px;">
-        <div style="font-size:14px;margin-bottom:20px;">Prepare pa: ___________________</div>
-        <div style="font-size:14px;margin-bottom:20px;">Verifye pa: ___________________</div>
-        <div style="font-size:14px;">Apwouve pa: ___________________</div>
-      </div>
-
-    </div>
-  `;
-
-}} style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>
-  🖨️ Enprime Rapo
-</button>
-      </div>
-
-      {/* FILTERS */}
+      {/* FILTERS — ADMIN */}
       {isAdmin && (
         <div className="no-print" style={{ background: 'white', borderRadius: '16px', padding: '25px', marginBottom: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }}>
           <h3 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '15px', fontWeight: '700' }}>Chèche Rapo</h3>
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div>
-  <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>Chèche pa Mwa</label>
-  <input type="month" onChange={e => {
-    if (e.target.value) {
-      const [year, month] = e.target.value.split('-');
-      const firstDay = year + '-' + month + '-01';
-      const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
-      setDateFrom(firstDay);
-      setDateTo(lastDay);
-    }
-  }} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
-</div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>Chèche pa Mwa</label>
+              <input type="month" onChange={e => {
+                if (e.target.value) {
+                  const [year, month] = e.target.value.split('-');
+                  const firstDay = year + '-' + month + '-01';
+                  const lastDay = new Date(year, month, 0).toISOString().split('T')[0];
+                  setDateFrom(firstDay);
+                  setDateTo(lastDay);
+                }
+              }} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
+            </div>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>De Dat</label>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }} />
@@ -275,8 +271,18 @@ function Reports({ user, branches }) {
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>Branch</label>
-              <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }}>
+              <select value={selectedBranch} onChange={e => { setSelectedBranch(e.target.value); setSelectedKesye('Tout Kesye'); }}
+                style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }}>
                 {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            {/* ✅ DROPDOWN KESYE */}
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '13px' }}>Kesye</label>
+              <select value={selectedKesye} onChange={e => setSelectedKesye(e.target.value)}
+                style={{ padding: '10px 15px', border: '2px solid #1a5c2a', borderRadius: '8px', fontSize: '14px' }}>
+                <option value="Tout Kesye">Tout Kesye</option>
+                {kesyeList.map(k => <option key={k.name} value={k.name}>{k.name}</option>)}
               </select>
             </div>
             <div style={{ background: '#e8f5e9', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', color: '#1a5c2a', fontWeight: '700' }}>
@@ -296,7 +302,7 @@ function Reports({ user, branches }) {
               Rapo: {isAdmin ? formatDate(dateFrom) + ' — ' + formatDate(dateTo) : formatDate(today)}
             </p>
             <p style={{ margin: 0, opacity: 0.75, fontSize: '12px' }}>
-              Branch: {isAdmin ? selectedBranch : user?.branch} | Prepare pa: {user?.name}
+              {rapòTit} | Prepare pa: {user?.name}
             </p>
           </div>
         </div>
@@ -333,9 +339,7 @@ function Reports({ user, branches }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
               <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', border: '2px solid #1a5c2a' }}>
                 <h3 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>📈 Benefis Total</h3>
-                <div style={{ fontSize: '28px', fontWeight: '900', color: '#1a5c2a', marginBottom: '15px' }}>
-                  HTG {totalBenefis.toLocaleString()}
-                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#1a5c2a', marginBottom: '15px' }}>HTG {totalBenefis.toLocaleString()}</div>
                 {[
                   { label: 'Fre Ouveti Kont', value: totalFreOuveti, color: '#9b59b6', icon: '💳' },
                   { label: 'Enterè Prè', value: totalEntere, color: '#f39c12', icon: '📋' },
@@ -350,12 +354,9 @@ function Reports({ user, branches }) {
                   </div>
                 ))}
               </div>
-
               <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', border: '2px solid #9b59b6' }}>
                 <h3 style={{ margin: '0 0 15px', color: '#9b59b6', fontSize: '16px', fontWeight: '700' }}>🔒 Kòb Bloke</h3>
-                <div style={{ fontSize: '28px', fontWeight: '900', color: '#9b59b6', marginBottom: '15px' }}>
-                  HTG {kobBloke.toLocaleString()}
-                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#9b59b6', marginBottom: '15px' }}>HTG {kobBloke.toLocaleString()}</div>
                 <div style={{ background: '#f3e8ff', borderRadius: '10px', padding: '15px', fontSize: '13px', color: '#9b59b6' }}>
                   <p style={{ margin: '0 0 8px', fontWeight: '700' }}>📊 Detay:</p>
                   <p style={{ margin: '0 0 5px' }}>• Total Kliyan: {kliyanData.length}</p>
@@ -367,7 +368,7 @@ function Reports({ user, branches }) {
           )}
 
           {/* RAPO PA BRANCH */}
-          {isAdmin && branchList.length > 0 && (
+          {isAdmin && selectedKesye === 'Tout Kesye' && branchList.length > 0 && (
             <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', marginBottom: '25px' }}>
               <h2 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>📊 Rapo pa Branch</h2>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -407,7 +408,7 @@ function Reports({ user, branches }) {
           {/* LIS TRANZAKSYON */}
           <div style={{ background: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', marginBottom: '25px' }}>
             <h2 style={{ margin: '0 0 20px', color: '#1a5c2a', fontSize: '16px', fontWeight: '700' }}>
-              📋 Lis Tranzaksyon {!isAdmin && '— ' + user?.branch}
+              📋 Lis Tranzaksyon — {rapòTit} ({transactions.length})
             </h2>
             {transactions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>

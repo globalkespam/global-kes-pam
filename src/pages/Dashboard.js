@@ -7,21 +7,11 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
   const ore = oreKes ? oreKes[user?.branch] : null;
 
   const [stats, setStats] = useState({
-    totalDepo: 0,
-    totalRetre: 0,
-    totalTransf: 0,
-    totalKliyan: 0,
-    preAktif: 0,
-    benefis: 0,
-    balansKes: 0,
-    kobBloke: 0,
-    pemaPreTotal: 0,
-    totalFreOuveti: 0,
-    totalAnile: 0,
-    montanAnile: 0,
-    rantre: 0,
-    soti: 0,
-    balansJounen: 0,
+    totalDepo: 0, totalRetre: 0, totalTransf: 0,
+    totalKliyan: 0, preAktif: 0, benefis: 0,
+    balansKes: 0, kobBloke: 0, pemaPreTotal: 0,
+    totalFreOuveti: 0, totalAnile: 0, montanAnile: 0,
+    rantre: 0, soti: 0, balansJounen: 0,
   });
 
   const [recentTrans, setRecentTrans] = useState([]);
@@ -36,59 +26,41 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
     setLoading(true);
 
     const now = new Date();
-    const todayHaiti = new Date(now.getTime() - (5 * 60 * 60 * 1000)).toISOString().split('T')[0];
+    const todayLocal = now.toISOString().split('T')[0];
 
+    // ✅ Filtre pa branch (Admin) oswa branch + kesye (Kesye)
     let transQuery = supabase
       .from('tranzaksyon')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (!isAdmin) {
-      transQuery = transQuery.eq('branch', user?.branch);
+    if (isAdmin) {
+      // Admin wè tout branch
+    } else {
+      // ✅ Kesye wè sèlman pwòp tranzaksyon pa li
+      transQuery = transQuery
+        .eq('branch', user?.branch)
+        .eq('kesye', user?.name);
     }
 
     const { data: transData } = await transQuery;
 
-    // Filtre jis tranzaksyon jounen an (valid + anile)
+    // ✅ Filtre jounen an — ore lokal aparèy
     const trans = (transData || []).filter(tr => {
-      const dat = new Date(tr.created_at);
-      const datHaiti = new Date(dat.getTime() - (5 * 60 * 60 * 1000)).toISOString().split('T')[0];
-      return datHaiti === todayHaiti;
+      const datLocal = new Date(tr.created_at).toISOString().split('T')[0];
+      return datLocal === todayLocal;
     });
 
-    // --- STATS ---
-    const totalDepo = trans
-      .filter(tr => tr.type === 'Depo' && !tr.annule)
-      .reduce((s, tr) => s + (tr.montan || 0), 0);
-
-    const totalRetre = trans
-      .filter(tr => tr.type === 'Retre' && !tr.annule)
-      .reduce((s, tr) => s + (tr.montan || 0), 0);
-
-    const totalTransf = trans
-      .filter(tr => tr.type === 'Transfere' && !tr.annule)
-      .reduce((s, tr) => s + (tr.montan || 0), 0);
-
-    const pemaPreTotal = trans
-      .filter(tr => tr.type === 'Peman Pre' && !tr.annule)
-      .reduce((s, tr) => s + (tr.montan || 0), 0);
-
-    const totalFreOuveti = trans
-      .filter(tr => tr.type === 'Fre Ouveti' && !tr.annule)
-      .reduce((s, tr) => s + (tr.montan || 0), 0);
-
+    // --- STATS (valid sèlman) ---
+    const totalDepo = trans.filter(tr => tr.type === 'Depo' && !tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
+    const totalRetre = trans.filter(tr => tr.type === 'Retre' && !tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
+    const totalTransf = trans.filter(tr => tr.type === 'Transfere' && !tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
+    const pemaPreTotal = trans.filter(tr => tr.type === 'Peman Pre' && !tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
+    const totalFreOuveti = trans.filter(tr => tr.type === 'Fre Ouveti' && !tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
     const totalAnile = trans.filter(tr => tr.annule).length;
-    const montanAnile = trans
-      .filter(tr => tr.annule)
-      .reduce((s, tr) => s + (tr.montan || 0), 0);
-
-    // Rantre = Depo + Fre Ouveti + Peman Pre (valid sèlman)
+    const montanAnile = trans.filter(tr => tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
     const rantre = totalDepo + totalFreOuveti + pemaPreTotal;
-
-    // Soti = Retre + Transfere (valid sèlman)
     const soti = totalRetre + totalTransf;
-
-    // Balans Jounen = Rantre - Soti
     const balansJounen = rantre - soti;
 
     const { data: kliyanData } = await supabase.from('kliyan').select('*');
@@ -99,28 +71,16 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
 
     const { data: preData } = await supabase.from('pre').select('*').eq('status', 'Aktif');
     const preAktif = (preData || []).length;
-
     const benefis = totalDepo - totalRetre + totalFreOuveti;
 
     setStats({
-      totalDepo,
-      totalRetre,
-      totalTransf,
-      totalKliyan,
-      preAktif,
-      benefis,
-      balansKes: balansTotal,
-      kobBloke,
-      pemaPreTotal,
-      totalFreOuveti,
-      totalAnile,
-      montanAnile,
-      rantre,
-      soti,
-      balansJounen,
+      totalDepo, totalRetre, totalTransf, totalKliyan,
+      preAktif, benefis, balansKes: balansTotal, kobBloke,
+      pemaPreTotal, totalFreOuveti, totalAnile, montanAnile,
+      rantre, soti, balansJounen,
     });
 
-    // ✅ Montre TOUT tranzaksyon jounen an (valid + anile)
+    // ✅ Tranzaksyon jounen — sèlman pa Kesye sa a
     setRecentTrans(trans);
     setLoading(false);
   };
@@ -171,6 +131,16 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
     return '#f39c12';
   };
 
+  // ✅ Konvèti 24h → 12h AM/PM
+  const to12h = (time24) => {
+    if (!time24) return '';
+    const [h, m] = time24.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return hour12 + ':' + m + ' ' + ampm;
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Segoe UI, sans-serif' }}>
 
@@ -198,7 +168,8 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
           </div>
           {ore && (
             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.75)', fontWeight: '600' }}>
-              {ore.louvri} - {ore.femen}
+              {/* ✅ Ore 12h format */}
+              {to12h(ore.louvri)} - {to12h(ore.femen)}
             </div>
           )}
         </div>
@@ -235,10 +206,11 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
       {/* BAS */}
       <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 340px' : '1fr', gap: '15px' }}>
 
-        {/* DÈNYE TRANZAKSYON — TOUT jounen an */}
+        {/* TRANZAKSYON JOUNEN */}
         <div style={{ background: 'white', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
           <h2 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px', fontWeight: '700' }}>
             🕐 Tranzaksyon Jounen an ({recentTrans.length})
+            {!isAdmin && <span style={{ fontSize: '11px', color: '#999', fontWeight: '400', marginLeft: '8px' }}>— {user?.name} sèlman</span>}
           </h2>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>⏳ Chaje...</div>
@@ -264,7 +236,6 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
                       borderBottom: '1px solid #eee',
                       opacity: tr.annule ? 0.75 : 1
                     }}>
-                      {/* ETA — ✅ valid oswa ❌ anile */}
                       <td style={{ padding: '10px 12px', fontSize: '16px', textAlign: 'center' }}>
                         {tr.annule ? '❌' : '✅'}
                       </td>
@@ -281,6 +252,7 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
                       </td>
                       <td style={{ padding: '10px 12px', color: '#666', fontSize: '12px' }}>{tr.kesye}</td>
                       <td style={{ padding: '10px 12px', color: '#666', fontSize: '12px' }}>
+                        {/* ✅ Ore lokal 12h */}
                         {new Date(tr.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                       </td>
                     </tr>
@@ -296,28 +268,22 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
           <div style={{ background: 'white', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
             <h2 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px', fontWeight: '700' }}>💰 Rezime Kès Jounen an</h2>
 
-            {/* Balans Kliyan */}
             <div style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '10px', padding: '15px', marginBottom: '12px', color: 'white', textAlign: 'center' }}>
               <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '5px', fontWeight: '600' }}>Kès Disponib (Balans Kliyan)</div>
               <div style={{ fontSize: '22px', fontWeight: '900' }}>HTG {stats.balansKes.toLocaleString()}</div>
             </div>
 
-            {/* Rantre / Soti / Balans Jounen */}
             <div style={{ background: '#f0faf3', border: '1px solid #c3e6cb', borderRadius: '10px', padding: '12px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <span style={{ fontSize: '13px', color: '#155724', fontWeight: '600' }}>📥 Kòb Rantre</span>
                 <span style={{ fontSize: '13px', fontWeight: '800', color: '#1a5c2a' }}>HTG {stats.rantre.toLocaleString()}</span>
               </div>
-              <div style={{ fontSize: '10px', color: '#666', marginBottom: '10px', paddingLeft: '4px' }}>
-                Depo + Frè Ouveti + Peman Prè
-              </div>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '10px', paddingLeft: '4px' }}>Depo + Frè Ouveti + Peman Prè</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <span style={{ fontSize: '13px', color: '#721c24', fontWeight: '600' }}>📤 Kòb Soti</span>
                 <span style={{ fontSize: '13px', fontWeight: '800', color: '#e74c3c' }}>HTG {stats.soti.toLocaleString()}</span>
               </div>
-              <div style={{ fontSize: '10px', color: '#666', marginBottom: '10px', paddingLeft: '4px' }}>
-                Retrè + Transfè
-              </div>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '10px', paddingLeft: '4px' }}>Retrè + Transfè</div>
               <div style={{ borderTop: '2px solid #1a5c2a', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '14px', color: '#1a5c2a', fontWeight: '800' }}>
                   {stats.balansJounen >= 0 ? '📈' : '📉'} Balans Kès
@@ -328,7 +294,6 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
               </div>
             </div>
 
-            {/* Detay */}
             {[
               { label: 'Depo', value: '+HTG ' + stats.totalDepo.toLocaleString(), color: '#2ecc71' },
               { label: 'Retrè', value: '-HTG ' + stats.totalRetre.toLocaleString(), color: '#e74c3c' },

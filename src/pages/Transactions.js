@@ -44,7 +44,9 @@ function Transactions({ user, parametres }) {
   const fetchHistorik = async (search) => {
     setLoadingHistorik(true);
     let query = supabase.from('tranzaksyon').select('*').order('created_at', { ascending: false }).limit(100);
-    if (!isAdmin) query = query.eq('branch', user?.branch);
+    if (!isAdmin) {
+      query = query.eq('branch', user?.branch).eq('kesye', user?.name);
+    }
     if (search) {
       query = query.or('num_kont.ilike.%' + search + '%,client.ilike.%' + search + '%,ref.ilike.%' + search + '%');
     }
@@ -460,6 +462,8 @@ function Transactions({ user, parametres }) {
                       <td style={{ padding: '12px 15px', color: '#666', fontSize: '12px' }}>{t.kesye}</td>
                       <td style={{ padding: '12px 15px', color: '#666', fontSize: '12px' }}>
                         {new Date(t.created_at).toLocaleDateString('fr-HT')}
+                        {' '}
+                        {new Date(t.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                       </td>
                       <td style={{ padding: '12px 15px' }}>
                         {t.annule ? (
