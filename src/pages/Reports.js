@@ -430,7 +430,7 @@ function Reports({ user, branches }) {
                       borderBottom: '1px solid #eee',
                       opacity: t.annule ? 0.75 : 1
                     }}>
-                      <td style={{ padding: '12px 15px', fontWeight: '700', color: '#1a5c2a', fontSize: '11px', textDecoration: t.annule ? 'line-through' : 'none', color: t.annule ? '#999' : '#1a5c2a' }}>{t.ref}</td>
+                      <td style={{ padding: '12px 15px', fontWeight: '700', fontSize: '11px', textDecoration: t.annule ? 'line-through' : 'none', color: t.annule ? '#999' : '#1a5c2a' }}>{t.ref}</td>
                       <td style={{ padding: '12px 15px' }}>
                         <span style={{ background: t.annule ? '#fdf2f2' : typeColor(t.type) + '20', color: t.annule ? '#e74c3c' : typeColor(t.type), padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
                           {t.annule ? '❌ ' : ''}{t.type}
