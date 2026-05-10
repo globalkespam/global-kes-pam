@@ -29,10 +29,10 @@ function Reports({ user, branches }) {
     let query = supabase.from('tranzaksyon').select('*').order('created_at', { ascending: false });
 
     if (isAdmin) {
-      query = query.gte('created_at', dateFrom).lte('created_at', dateTo + 'T23:59:59');
+      query = query.gte('created_at', dateFrom + 'T00:00:00').lte('created_at', dateTo + 'T23:59:59+00:00');
       if (selectedBranch !== 'Tout Branch') query = query.eq('branch', selectedBranch);
     } else {
-      query = query.eq('branch', user?.branch).gte('created_at', today).lte('created_at', today + 'T23:59:59');
+      query = query.eq('branch', user?.branch);
     }
 
     const { data: transData } = await query;
@@ -43,7 +43,7 @@ function Reports({ user, branches }) {
       benefisQuery = benefisQuery.gte('created_at', dateFrom).lte('created_at', dateTo + 'T23:59:59');
       if (selectedBranch !== 'Tout Branch') benefisQuery = benefisQuery.eq('branch', selectedBranch);
     } else {
-      benefisQuery = benefisQuery.eq('branch', user?.branch).gte('created_at', today).lte('created_at', today + 'T23:59:59');
+      benefisQuery = benefisQuery.eq('branch', user?.branch);
     }
     const { data: benData } = await benefisQuery;
     setBenefisData(benData || []);
@@ -54,12 +54,41 @@ function Reports({ user, branches }) {
     setLoading(false);
   };
 
-  const totalDepo = transactions.filter(t => t.type === 'Depo').reduce((s, t) => s + (t.montan || 0), 0);
-  const totalRetre = transactions.filter(t => t.type === 'Retre').reduce((s, t) => s + (t.montan || 0), 0);
-  const totalTransf = transactions.filter(t => t.type === 'Transfere').reduce((s, t) => s + (t.montan || 0), 0);
-  const totalPre = transactions.filter(t => t.type === 'Peman Pre').reduce((s, t) => s + (t.montan || 0), 0);
+  // ✅ Kalkil kòrèkt — Valid sèlman (pa retire de total, jis pran valid)
+  const totalDepo = transactions
+    .filter(t => t.type === 'Depo' && !t.annule)
+    .reduce((s, t) => s + (t.montan || 0), 0);
 
-  const totalFreOuveti = benefisData.filter(b => b.type === 'Fre Ouveti Kont').reduce((s, b) => s + (b.montan || 0), 0);
+  const totalRetre = transactions
+    .filter(t => t.type === 'Retre' && !t.annule)
+    .reduce((s, t) => s + (t.montan || 0), 0);
+
+  const totalTransf = transactions
+    .filter(t => t.type === 'Transfere' && !t.annule)
+    .reduce((s, t) => s + (t.montan || 0), 0);
+
+  const totalPre = transactions
+    .filter(t => t.type === 'Peman Pre' && !t.annule)
+    .reduce((s, t) => s + (t.montan || 0), 0);
+
+  const totalFreOuveti = benefisData
+    .filter(b => b.type === 'Fre Ouveti Kont')
+    .reduce((s, b) => s + (b.montan || 0), 0);
+
+  // Anile — kantite ak montan total
+  const totalAnile = transactions.filter(t => t.annule).length;
+  const montanAnile = transactions
+    .filter(t => t.annule)
+    .reduce((s, t) => s + (t.montan || 0), 0);
+
+  // Rantre = Depo valid + Fre Ouveti + Peman Pre
+  const rantre = totalDepo + totalFreOuveti + totalPre;
+
+  // Soti = Retre valid + Transfe valid
+  const soti = totalRetre + totalTransf;
+
+  // Balans = Rantre - Soti
+  const balansKes = rantre - soti;
   const totalEntere = benefisData.filter(b => b.type === 'Enterè Prè').reduce((s, b) => s + (b.montan || 0), 0);
   const totalPenalite = benefisData.filter(b => b.type === 'Penalite Prè').reduce((s, b) => s + (b.montan || 0), 0);
   const totalBenefis = totalFreOuveti + totalEntere + totalPenalite;
@@ -139,13 +168,35 @@ function Reports({ user, branches }) {
           <span>Peman Pre:</span><span style="font-weight:bold;">HTG ${totalPre.toLocaleString()}</span>
         </div>
         ${isAdmin ? `
-        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
           <span>Benefis Total:</span><span style="font-weight:bold;">HTG ${totalBenefis.toLocaleString()}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0;">
           <span>Kob Bloke:</span><span style="font-weight:bold;">HTG ${kobBloke.toLocaleString()}</span>
         </div>
         ` : ''}
+        <div style="border-top:1px solid #000;margin-top:8px;padding-top:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+            <span>ANILE (${totalAnile} tranzaksyon):</span>
+            <span style="font-weight:bold;">HTG ${montanAnile.toLocaleString()}</span>
+          </div>
+          <div style="height:1px;background:#ccc;margin:6px 0;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+            <span>KOB RANTRE:</span>
+            <span style="font-weight:bold;">HTG ${rantre.toLocaleString()}</span>
+          </div>
+          <div style="font-size:10px;color:#000;padding:1px 0 5px 6px;">Depo + Fre Ouveti + Peman Pre</div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+            <span>KOB SOTI:</span>
+            <span style="font-weight:bold;">HTG ${soti.toLocaleString()}</span>
+          </div>
+          <div style="font-size:10px;color:#000;padding:1px 0 5px 6px;">Retre + Transfe</div>
+          <div style="height:2px;background:#000;margin:6px 0;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:bold;padding:4px 0;">
+            <span>BALANS KES:</span>
+            <span>${balansKes >= 0 ? '+' : ''}HTG ${balansKes.toLocaleString()}</span>
+          </div>
+        </div>
       </div>
 
       ${isAdmin ? `
@@ -258,11 +309,15 @@ function Reports({ user, branches }) {
           {/* STATS */}
           <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)', gap: '15px', marginBottom: '20px' }}>
             {[
-              { label: 'Total Depo', value: 'HTG ' + totalDepo.toLocaleString(), icon: '💰', color: '#2ecc71' },
-              { label: 'Total Retre', value: 'HTG ' + totalRetre.toLocaleString(), icon: '💸', color: '#e74c3c' },
-              { label: 'Total Transfe', value: 'HTG ' + totalTransf.toLocaleString(), icon: '🔄', color: '#3498db' },
-              { label: 'Peman Prè', value: 'HTG ' + totalPre.toLocaleString(), icon: '📋', color: '#f39c12' },
-            ].map((s, i) => (
+              { label: 'Total Depo', value: 'HTG ' + totalDepo.toLocaleString(), icon: '💰', color: '#2ecc71', show: true },
+              { label: 'Total Retre', value: 'HTG ' + totalRetre.toLocaleString(), icon: '💸', color: '#e74c3c', show: true },
+              { label: 'Total Transfe', value: 'HTG ' + totalTransf.toLocaleString(), icon: '🔄', color: '#3498db', show: true },
+              { label: 'Peman Prè', value: 'HTG ' + totalPre.toLocaleString(), icon: '📋', color: '#f39c12', show: true },
+              { label: totalAnile + ' Tranzaksyon Anile', value: 'HTG ' + montanAnile.toLocaleString(), icon: '❌', color: '#e74c3c', show: true },
+              { label: 'Kòb Rantre', value: 'HTG ' + rantre.toLocaleString(), icon: '📥', color: '#1a5c2a', show: isAdmin },
+              { label: 'Kòb Soti', value: 'HTG ' + soti.toLocaleString(), icon: '📤', color: '#e74c3c', show: isAdmin },
+              { label: 'Balans Kès', value: 'HTG ' + balansKes.toLocaleString(), icon: '🏦', color: '#3498db', show: isAdmin },
+            ].filter(s => s.show).map((s, i) => (
               <div key={i} style={{ background: 'white', borderRadius: '14px', padding: '18px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderLeft: '5px solid ' + s.color, display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '26px' }}>{s.icon}</span>
                 <div>
@@ -370,13 +425,19 @@ function Reports({ user, branches }) {
                 </thead>
                 <tbody>
                   {transactions.map((t, i) => (
-                    <tr key={t.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #eee' }}>
-                      <td style={{ padding: '12px 15px', fontWeight: '700', color: '#1a5c2a', fontSize: '11px' }}>{t.ref}</td>
+                    <tr key={t.id} style={{
+                      background: t.annule ? '#fff5f5' : (i % 2 === 0 ? '#f9f9f9' : 'white'),
+                      borderBottom: '1px solid #eee',
+                      opacity: t.annule ? 0.75 : 1
+                    }}>
+                      <td style={{ padding: '12px 15px', fontWeight: '700', color: '#1a5c2a', fontSize: '11px', textDecoration: t.annule ? 'line-through' : 'none', color: t.annule ? '#999' : '#1a5c2a' }}>{t.ref}</td>
                       <td style={{ padding: '12px 15px' }}>
-                        <span style={{ background: typeColor(t.type) + '20', color: typeColor(t.type), padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>{t.type}</span>
+                        <span style={{ background: t.annule ? '#fdf2f2' : typeColor(t.type) + '20', color: t.annule ? '#e74c3c' : typeColor(t.type), padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                          {t.annule ? '❌ ' : ''}{t.type}
+                        </span>
                       </td>
-                      <td style={{ padding: '12px 15px', fontWeight: '600', fontSize: '13px' }}>{t.client}</td>
-                      <td style={{ padding: '12px 15px', fontWeight: '700', color: typeColor(t.type) }}>HTG {t.montan?.toLocaleString()}</td>
+                      <td style={{ padding: '12px 15px', fontWeight: '600', fontSize: '13px', textDecoration: t.annule ? 'line-through' : 'none', color: t.annule ? '#999' : 'inherit' }}>{t.client}</td>
+                      <td style={{ padding: '12px 15px', fontWeight: '700', color: t.annule ? '#999' : typeColor(t.type), textDecoration: t.annule ? 'line-through' : 'none' }}>HTG {t.montan?.toLocaleString()}</td>
                       <td style={{ padding: '12px 15px', color: '#666', fontSize: '12px' }}>{t.kesye}</td>
                       <td style={{ padding: '12px 15px', color: '#666', fontSize: '12px' }}>{t.branch}</td>
                       <td style={{ padding: '12px 15px', color: '#666', fontSize: '12px' }}>{formatDate(t.created_at)}</td>

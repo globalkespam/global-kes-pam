@@ -16,6 +16,12 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
     balansKes: 0,
     kobBloke: 0,
     pemaPreTotal: 0,
+    totalFreOuveti: 0,
+    totalAnile: 0,
+    montanAnile: 0,
+    rantre: 0,
+    soti: 0,
+    balansJounen: 0,
   });
 
   const [recentTrans, setRecentTrans] = useState([]);
@@ -28,39 +34,73 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
 
   const fetchStats = async () => {
     setLoading(true);
-    const today = new Date().toISOString().split('T')[0];
 
-    // TRANZAKSYON JOUNEN AN
+    const now = new Date();
+    const todayHaiti = new Date(now.getTime() - (5 * 60 * 60 * 1000)).toISOString().split('T')[0];
+
     let transQuery = supabase
       .from('tranzaksyon')
       .select('*')
-      .gte('created_at', today)
-      .lte('created_at', today + 'T23:59:59');
+      .order('created_at', { ascending: false });
 
     if (!isAdmin) {
       transQuery = transQuery.eq('branch', user?.branch);
     }
 
     const { data: transData } = await transQuery;
-    const trans = transData || [];
 
-    const totalDepo = trans.filter(t => t.type === 'Depo').reduce((s, t) => s + (t.montan || 0), 0);
-    const totalRetre = trans.filter(t => t.type === 'Retre').reduce((s, t) => s + (t.montan || 0), 0);
-    const totalTransf = trans.filter(t => t.type === 'Transfere').reduce((s, t) => s + (t.montan || 0), 0);
-    const pemaPreTotal = trans.filter(t => t.type === 'Peman Pre').reduce((s, t) => s + (t.montan || 0), 0);
+    // Filtre jis tranzaksyon jounen an (valid + anile)
+    const trans = (transData || []).filter(tr => {
+      const dat = new Date(tr.created_at);
+      const datHaiti = new Date(dat.getTime() - (5 * 60 * 60 * 1000)).toISOString().split('T')[0];
+      return datHaiti === todayHaiti;
+    });
 
-    // KLIYAN
+    // --- STATS ---
+    const totalDepo = trans
+      .filter(tr => tr.type === 'Depo' && !tr.annule)
+      .reduce((s, tr) => s + (tr.montan || 0), 0);
+
+    const totalRetre = trans
+      .filter(tr => tr.type === 'Retre' && !tr.annule)
+      .reduce((s, tr) => s + (tr.montan || 0), 0);
+
+    const totalTransf = trans
+      .filter(tr => tr.type === 'Transfere' && !tr.annule)
+      .reduce((s, tr) => s + (tr.montan || 0), 0);
+
+    const pemaPreTotal = trans
+      .filter(tr => tr.type === 'Peman Pre' && !tr.annule)
+      .reduce((s, tr) => s + (tr.montan || 0), 0);
+
+    const totalFreOuveti = trans
+      .filter(tr => tr.type === 'Fre Ouveti' && !tr.annule)
+      .reduce((s, tr) => s + (tr.montan || 0), 0);
+
+    const totalAnile = trans.filter(tr => tr.annule).length;
+    const montanAnile = trans
+      .filter(tr => tr.annule)
+      .reduce((s, tr) => s + (tr.montan || 0), 0);
+
+    // Rantre = Depo + Fre Ouveti + Peman Pre (valid sèlman)
+    const rantre = totalDepo + totalFreOuveti + pemaPreTotal;
+
+    // Soti = Retre + Transfere (valid sèlman)
+    const soti = totalRetre + totalTransf;
+
+    // Balans Jounen = Rantre - Soti
+    const balansJounen = rantre - soti;
+
     const { data: kliyanData } = await supabase.from('kliyan').select('*');
     const kliyan = kliyanData || [];
     const totalKliyan = kliyan.length;
-    const kobBloke = kliyan.reduce((s, k) => s + 500, 0);
+    const kobBloke = kliyan.reduce((s, k) => s + (k.reserve || 500), 0);
     const balansTotal = kliyan.reduce((s, k) => s + (k.balance || 0), 0);
 
-    // PRE
     const { data: preData } = await supabase.from('pre').select('*').eq('status', 'Aktif');
     const preAktif = (preData || []).length;
 
-    const benefis = totalDepo - totalRetre;
+    const benefis = totalDepo - totalRetre + totalFreOuveti;
 
     setStats({
       totalDepo,
@@ -72,9 +112,16 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
       balansKes: balansTotal,
       kobBloke,
       pemaPreTotal,
+      totalFreOuveti,
+      totalAnile,
+      montanAnile,
+      rantre,
+      soti,
+      balansJounen,
     });
 
-    setRecentTrans(trans.slice(0, 5));
+    // ✅ Montre TOUT tranzaksyon jounen an (valid + anile)
+    setRecentTrans(trans);
     setLoading(false);
   };
 
@@ -102,16 +149,17 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
   const statsAdmin = [
     { label: 'Total Depo Jounen', value: 'HTG ' + stats.totalDepo.toLocaleString(), icon: '💰', color: '#1a5c2a' },
     { label: 'Total Retrè', value: 'HTG ' + stats.totalRetre.toLocaleString(), icon: '💸', color: '#e74c3c' },
+    { label: 'Frè Ouveti', value: 'HTG ' + stats.totalFreOuveti.toLocaleString(), icon: '💳', color: '#9b59b6' },
     { label: 'Pre Aktif', value: stats.preAktif, icon: '📋', color: '#f39c12' },
     { label: 'Total Kliyan', value: stats.totalKliyan, icon: '👥', color: '#3498db' },
-    { label: 'Benefis Net', value: 'HTG ' + stats.benefis.toLocaleString(), icon: '📈', color: '#9b59b6' },
+    { label: stats.totalAnile + ' Anile | HTG ' + stats.montanAnile.toLocaleString(), value: '', icon: '❌', color: '#e74c3c' },
   ];
 
   const statsKesye = [
     { label: 'Total Depo Jounen', value: 'HTG ' + stats.totalDepo.toLocaleString(), icon: '💰', color: '#1a5c2a' },
     { label: 'Total Retrè', value: 'HTG ' + stats.totalRetre.toLocaleString(), icon: '💸', color: '#e74c3c' },
+    { label: 'Frè Ouveti', value: 'HTG ' + stats.totalFreOuveti.toLocaleString(), icon: '💳', color: '#9b59b6' },
     { label: 'Pre Aktif', value: stats.preAktif, icon: '📋', color: '#f39c12' },
-    { label: 'Total Kliyan', value: stats.totalKliyan, icon: '👥', color: '#3498db' },
   ];
 
   const statsList = isAdmin ? statsAdmin : statsKesye;
@@ -185,11 +233,13 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
       </div>
 
       {/* BAS */}
-      <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 320px' : '1fr', gap: '15px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 340px' : '1fr', gap: '15px' }}>
 
-        {/* DÈNYE TRANZAKSYON */}
+        {/* DÈNYE TRANZAKSYON — TOUT jounen an */}
         <div style={{ background: 'white', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
-          <h2 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px', fontWeight: '700' }}>🕐 Dènye Tranzaksyon</h2>
+          <h2 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px', fontWeight: '700' }}>
+            🕐 Tranzaksyon Jounen an ({recentTrans.length})
+          </h2>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>⏳ Chaje...</div>
           ) : recentTrans.length === 0 ? (
@@ -198,52 +248,100 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
               Pa gen tranzaksyon jodi a
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
-                  {['Kliyan', 'Tip', 'Montan', 'Kesye', 'Lè'].map((h, i) => (
-                    <th key={i} style={{ padding: '10px 12px', color: 'white', textAlign: 'left', fontSize: '12px', fontWeight: '700' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentTrans.map((t, i) => (
-                  <tr key={t.id} style={{ background: i % 2 === 0 ? '#f9f9f9' : 'white', borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: '600', fontSize: '13px' }}>{t.client}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{ background: typeColor(t.type) + '20', color: typeColor(t.type), padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>{t.type}</span>
-                    </td>
-                    <td style={{ padding: '10px 12px', fontWeight: '700', color: typeColor(t.type), fontSize: '13px' }}>HTG {t.montan?.toLocaleString()}</td>
-                    <td style={{ padding: '10px 12px', color: '#666', fontSize: '12px' }}>{t.kesye}</td>
-                    <td style={{ padding: '10px 12px', color: '#666', fontSize: '12px' }}>
-                      {new Date(t.created_at).toLocaleTimeString('fr-HT', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
+            <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0 }}>
+                  <tr style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)' }}>
+                    {['Eta', 'Kliyan', 'Tip', 'Montan', 'Kesye', 'Lè'].map((h, i) => (
+                      <th key={i} style={{ padding: '10px 12px', color: 'white', textAlign: 'left', fontSize: '12px', fontWeight: '700' }}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recentTrans.map((tr, i) => (
+                    <tr key={tr.id} style={{
+                      background: tr.annule ? '#fff5f5' : (i % 2 === 0 ? '#f9f9f9' : 'white'),
+                      borderBottom: '1px solid #eee',
+                      opacity: tr.annule ? 0.75 : 1
+                    }}>
+                      {/* ETA — ✅ valid oswa ❌ anile */}
+                      <td style={{ padding: '10px 12px', fontSize: '16px', textAlign: 'center' }}>
+                        {tr.annule ? '❌' : '✅'}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontWeight: '600', fontSize: '13px', textDecoration: tr.annule ? 'line-through' : 'none', color: tr.annule ? '#999' : 'inherit' }}>
+                        {tr.client}
+                      </td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <span style={{ background: typeColor(tr.type) + '20', color: tr.annule ? '#999' : typeColor(tr.type), padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' }}>
+                          {tr.type}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', fontWeight: '700', color: tr.annule ? '#999' : typeColor(tr.type), fontSize: '13px', textDecoration: tr.annule ? 'line-through' : 'none' }}>
+                        HTG {tr.montan?.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#666', fontSize: '12px' }}>{tr.kesye}</td>
+                      <td style={{ padding: '10px 12px', color: '#666', fontSize: '12px' }}>
+                        {new Date(tr.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
         {/* BALANS KES — ADMIN SELMAN */}
         {isAdmin && (
           <div style={{ background: 'white', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
-            <h2 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px', fontWeight: '700' }}>💰 Balans Kès</h2>
-            <div style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '10px', padding: '15px', marginBottom: '15px', color: 'white', textAlign: 'center' }}>
-              <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '5px', fontWeight: '600' }}>Kès Disponib</div>
+            <h2 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px', fontWeight: '700' }}>💰 Rezime Kès Jounen an</h2>
+
+            {/* Balans Kliyan */}
+            <div style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '10px', padding: '15px', marginBottom: '12px', color: 'white', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '5px', fontWeight: '600' }}>Kès Disponib (Balans Kliyan)</div>
               <div style={{ fontSize: '22px', fontWeight: '900' }}>HTG {stats.balansKes.toLocaleString()}</div>
             </div>
+
+            {/* Rantre / Soti / Balans Jounen */}
+            <div style={{ background: '#f0faf3', border: '1px solid #c3e6cb', borderRadius: '10px', padding: '12px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#155724', fontWeight: '600' }}>📥 Kòb Rantre</span>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: '#1a5c2a' }}>HTG {stats.rantre.toLocaleString()}</span>
+              </div>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '10px', paddingLeft: '4px' }}>
+                Depo + Frè Ouveti + Peman Prè
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#721c24', fontWeight: '600' }}>📤 Kòb Soti</span>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: '#e74c3c' }}>HTG {stats.soti.toLocaleString()}</span>
+              </div>
+              <div style={{ fontSize: '10px', color: '#666', marginBottom: '10px', paddingLeft: '4px' }}>
+                Retrè + Transfè
+              </div>
+              <div style={{ borderTop: '2px solid #1a5c2a', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '14px', color: '#1a5c2a', fontWeight: '800' }}>
+                  {stats.balansJounen >= 0 ? '📈' : '📉'} Balans Kès
+                </span>
+                <span style={{ fontSize: '14px', fontWeight: '900', color: stats.balansJounen >= 0 ? '#1a5c2a' : '#e74c3c' }}>
+                  {stats.balansJounen >= 0 ? '+' : ''}HTG {stats.balansJounen.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Detay */}
             {[
               { label: 'Depo', value: '+HTG ' + stats.totalDepo.toLocaleString(), color: '#2ecc71' },
               { label: 'Retrè', value: '-HTG ' + stats.totalRetre.toLocaleString(), color: '#e74c3c' },
               { label: 'Transfè', value: 'HTG ' + stats.totalTransf.toLocaleString(), color: '#3498db' },
+              { label: 'Frè Ouveti', value: 'HTG ' + stats.totalFreOuveti.toLocaleString(), color: '#9b59b6' },
               { label: 'Peman Prè', value: 'HTG ' + stats.pemaPreTotal.toLocaleString(), color: '#e67e22' },
-              { label: 'Kòb Bloke', value: 'HTG ' + stats.kobBloke.toLocaleString(), color: '#9b59b6' },
+              { label: 'Kòb Bloke', value: 'HTG ' + stats.kobBloke.toLocaleString(), color: '#95a5a6' },
               { label: 'Benefis', value: 'HTG ' + stats.benefis.toLocaleString(), color: '#f39c12' },
+              { label: '❌ Anile (' + stats.totalAnile + ')', value: 'HTG ' + stats.montanAnile.toLocaleString(), color: '#e74c3c' },
             ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span style={{ fontSize: '13px', color: '#666' }}>{item.label}</span>
-                <span style={{ fontSize: '13px', fontWeight: '800', color: item.color }}>{item.value}</span>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+                <span style={{ fontSize: '12px', color: '#666' }}>{item.label}</span>
+                <span style={{ fontSize: '12px', fontWeight: '800', color: item.color }}>{item.value}</span>
               </div>
             ))}
           </div>

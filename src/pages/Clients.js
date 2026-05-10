@@ -163,9 +163,9 @@ const [showEdit, setShowEdit] = useState(null);
 
     await supabase.from('tranzaksyon').insert([{
       type: 'Depo',
-      num_kont: numKont,
-      client: form.nom + ' ' + form.prenon,
-      montan: balans || 0,
+num_kont: numKont,
+client: form.nom + ' ' + form.prenon,
+montan: balans,
       deviz: form.deviz,
       branch: form.branch || user?.branch,
       kesye: user?.name,

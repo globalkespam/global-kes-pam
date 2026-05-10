@@ -30,6 +30,7 @@ function App() {
   const [branches, setBranches] = useState([]);
   const [oreKes, setOreKes] = useState({});
   const [currentTime, setCurrentTime] = useState('');
+  const [appReady, setAppReady] = useState(false);
   const [parametres, setParametres] = useState({
     fre_ouveti_HTG: 300,
     fre_ouveti_USD: 5,
@@ -48,7 +49,9 @@ function App() {
       const now = new Date();
       const h = now.getHours();
       const m = now.getMinutes();
-      setCurrentTime(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+      const ampm = h >= 12 ? 'PM' : 'AM';
+const h12 = h % 12 || 12;
+setCurrentTime(String(h12).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ' ' + ampm);
     };
     checkTime();
     const interval = setInterval(checkTime, 60000);
@@ -56,42 +59,54 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetchUsers();
-    fetchBranches();
-    fetchParametres();
+    Promise.all([fetchUsers(), fetchBranches(), fetchParametres()])
+      .then(() => setAppReady(true))
+      .catch(() => setAppReady(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchUsers = async () => {
-    const { data } = await supabase.from('itilizate').select('*');
-    setUsers(data || []);
+    try {
+      const { data } = await supabase.from('itilizate').select('*');
+      setUsers(data || []);
+    } catch (e) {
+      console.error('fetchUsers:', e);
+    }
   };
 
   const fetchBranches = async () => {
-    const { data } = await supabase.from('branches').select('*').order('id');
-    if (data) {
-      setBranches(data);
-      const ore = {};
-      data.forEach(b => {
-        ore[b.nom] = {
-          louvri: b.louvri || '07:00',
-          femen: b.femen || '20:00',
-          aktif: b.aktif !== false,
-          jou: b.jou || [true,true,true,true,true,true,true],
-        };
-      });
-      setOreKes(ore);
+    try {
+      const { data } = await supabase.from('branches').select('*').order('id');
+      if (data) {
+        setBranches(data);
+        const ore = {};
+        data.forEach(b => {
+          ore[b.nom] = {
+            louvri: b.louvri || '07:00',
+            femen: b.femen || '20:00',
+            aktif: b.aktif !== false,
+            jou: b.jou || [true,true,true,true,true,true,true],
+          };
+        });
+        setOreKes(ore);
+      }
+    } catch (e) {
+      console.error('fetchBranches:', e);
     }
   };
 
   const fetchParametres = async () => {
-    const { data } = await supabase.from('parametres').select('*');
-    if (data) {
-      const params = {};
-      data.forEach(p => {
-        params[p.cle] = parseFloat(p.valeur) || p.valeur;
-      });
-      setParametres(prev => ({ ...prev, ...params }));
+    try {
+      const { data } = await supabase.from('parametres').select('*');
+      if (data) {
+        const params = {};
+        data.forEach(p => {
+          params[p.cle] = parseFloat(p.valeur) || p.valeur;
+        });
+        setParametres(prev => ({ ...prev, ...params }));
+      }
+    } catch (e) {
+      console.error('fetchParametres:', e);
     }
   };
 
@@ -156,6 +171,15 @@ function App() {
   };
 
   const navigate = (page) => setCurrentPage(page);
+
+  if (!appReady) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'linear-gradient(135deg, #1a5c2a, #0d3518)', flexDirection: 'column', gap: '20px' }}>
+        <img src={logo} alt="GKP" style={{ width: '100px', height: '100px', borderRadius: '12px' }} />
+        <div style={{ color: 'white', fontSize: '18px', fontWeight: '700' }}>Chaje...</div>
+      </div>
+    );
+  }
 
   if (currentPage === 'login') {
     return (

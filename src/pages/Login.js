@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import logo from '../assets/logo.jpeg.jpeg';
 
 function Login({ onLogin, users, currentLang, setCurrentLang, langFlags, t }) {
   const [selectedUser, setSelectedUser] = useState('');
+  useEffect(() => {
+    setSelectedUser('');
+  }, [users]);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');

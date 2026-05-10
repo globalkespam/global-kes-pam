@@ -253,10 +253,16 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
                     <div>
                       <label style={labelStyle}>Le Louveti</label>
                       <input type="time" value={ore.louvri} onChange={e => setOreKes({ ...oreKes, [branch.nom]: { ...ore, louvri: e.target.value } })} style={inputStyle} />
+<div style={{ fontSize: '12px', color: '#1a5c2a', marginTop: '3px', fontWeight: '600' }}>
+  {ore.louvri ? (parseInt(ore.louvri.split(':')[0]) >= 12 ? ore.louvri + ' PM' : ore.louvri + ' AM') : ''}
+</div>
                     </div>
                     <div>
                       <label style={labelStyle}>Le Femti</label>
                       <input type="time" value={ore.femen} onChange={e => setOreKes({ ...oreKes, [branch.nom]: { ...ore, femen: e.target.value } })} style={inputStyle} />
+<div style={{ fontSize: '12px', color: '#1a5c2a', marginTop: '3px', fontWeight: '600' }}>
+  {ore.femen ? (parseInt(ore.femen.split(':')[0]) >= 12 ? ore.femen + ' PM' : ore.femen + ' AM') : ''}
+</div>
                     </div>
                   </div>
                   <div style={{ marginBottom: '15px' }}>
@@ -368,6 +374,11 @@ function Settings({ user, branches, setBranches, oreKes, setOreKes, parametres, 
                                 🗑️
                               </button>
                             </>
+                          )}
+                          {u.name === user.name && (
+                            <span style={{ fontSize: '11px', color: '#1a5c2a', fontWeight: '700', padding: '6px 8px', background: '#e8f5e9', borderRadius: '6px' }}>
+                              👑 Ou menm
+                            </span>
                           )}
                         </div>
                       </td>
