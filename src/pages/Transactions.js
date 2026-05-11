@@ -8,6 +8,10 @@ function Transactions({ user, parametres }) {
   const [historik, setHistorik] = useState([]);
   const [loadingHistorik, setLoadingHistorik] = useState(false);
   const [searchHistorik, setSearchHistorik] = useState('');
+  const now = new Date();
+  const todayStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  const [histDateFrom, setHistDateFrom] = useState(todayStr);
+  const [histDateTo, setHistDateTo] = useState(todayStr);
 
   const [depoSearch, setDepoSearch] = useState('');
   const [depoClient, setDepoClient] = useState(null);
@@ -41,9 +45,17 @@ function Transactions({ user, parametres }) {
     setClients(data || []);
   };
 
-  const fetchHistorik = async (search) => {
+  const fetchHistorik = async (search, dateFrom, dateTo) => {
     setLoadingHistorik(true);
-    let query = supabase.from('tranzaksyon').select('*').order('created_at', { ascending: false }).limit(100);
+    const dFrom = dateFrom || histDateFrom;
+    const dTo = dateTo || histDateTo;
+
+    let query = supabase.from('tranzaksyon').select('*')
+      .order('created_at', { ascending: false })
+      .limit(200)
+      .gte('created_at', dFrom + 'T00:00:00')
+      .lte('created_at', dTo + 'T23:59:59');
+
     if (!isAdmin) {
       query = query.eq('branch', user?.branch).eq('kesye', user?.name);
     }
@@ -421,12 +433,55 @@ function Transactions({ user, parametres }) {
       {activeTab === 'historik' && (
         <div>
           <h2 style={{ margin: '0 0 20px', color: '#333', fontSize: '20px' }}>📜 Histoik Tranzaksyon</h2>
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <input value={searchHistorik} onChange={e => setSearchHistorik(e.target.value)} onKeyPress={e => e.key === 'Enter' && fetchHistorik(searchHistorik)}
-              placeholder="Chèche pa ref, non kliyan, oswa nimewo kont..."
-              style={{ flex: 1, padding: '12px 16px', border: '2px solid #e0e0e0', borderRadius: '10px', fontSize: '14px' }} />
-            <button onClick={() => fetchHistorik(searchHistorik)} style={{ padding: '12px 24px', background: '#9b59b6', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>🔍 Chèche</button>
-            <button onClick={() => { setSearchHistorik(''); fetchHistorik(''); }} style={{ padding: '12px 24px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>Tout</button>
+          {/* FILTRE DAT + CHÈCHE */}
+          <div style={{ background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)' }}>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '12px', color: '#666' }}>DE DAT</label>
+                <input type="date" value={histDateFrom} onChange={e => setHistDateFrom(e.target.value)}
+                  style={{ padding: '10px 14px', border: '2px solid #9b59b6', borderRadius: '8px', fontSize: '14px' }} />
+              </div>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#9b59b6', paddingBottom: '8px' }}>→</div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '12px', color: '#666' }}>JISKA DAT</label>
+                <input type="date" value={histDateTo} onChange={e => setHistDateTo(e.target.value)}
+                  style={{ padding: '10px 14px', border: '2px solid #9b59b6', borderRadius: '8px', fontSize: '14px' }} />
+              </div>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '12px', color: '#666' }}>CHÈCHE</label>
+                <input value={searchHistorik} onChange={e => setSearchHistorik(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && fetchHistorik(searchHistorik, histDateFrom, histDateTo)}
+                  placeholder="Ref, non kliyan, nimewo kont..."
+                  style={{ width: '100%', padding: '10px 14px', border: '2px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+              <button onClick={() => fetchHistorik(searchHistorik, histDateFrom, histDateTo)}
+                style={{ padding: '10px 24px', background: '#9b59b6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
+                🔍 Chèche
+              </button>
+              <button onClick={() => {
+                setSearchHistorik('');
+                setHistDateFrom(todayStr);
+                setHistDateTo(todayStr);
+                fetchHistorik('', todayStr, todayStr);
+              }} style={{ padding: '10px 20px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
+                Jounen an
+              </button>
+              {isAdmin && (
+                <button onClick={() => {
+                  const d = new Date();
+                  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+                  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+                  setHistDateFrom(firstDay);
+                  setHistDateTo(lastDay);
+                  fetchHistorik('', firstDay, lastDay);
+                }} style={{ padding: '10px 20px', background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
+                  Mwa a
+                </button>
+              )}
+              <div style={{ background: '#f3e8ff', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', color: '#9b59b6', fontWeight: '700' }}>
+                {historik.length} tranzaksyon
+              </div>
+            </div>
           </div>
 
           {loadingHistorik ? (

@@ -29,13 +29,18 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
     const todayLocal = now.toISOString().split('T')[0];
 
     // ✅ Filtre pa branch (Admin) oswa branch + kesye (Kesye)
+    const todayStart = todayLocal + 'T00:00:00.000Z';
+    const todayEnd = todayLocal + 'T23:59:59.999Z';
+
     let transQuery = supabase
       .from('tranzaksyon')
       .select('*')
+      .gte('created_at', todayStart)
+      .lte('created_at', todayEnd)
       .order('created_at', { ascending: false });
 
     if (isAdmin) {
-      // Admin wè tout branch
+      // Admin wè tout branch — sèlman jounen an
     } else {
       // ✅ Kesye wè sèlman pwòp tranzaksyon pa li
       transQuery = transQuery
@@ -44,12 +49,7 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
     }
 
     const { data: transData } = await transQuery;
-
-    // ✅ Filtre jounen an — ore lokal aparèy
-    const trans = (transData || []).filter(tr => {
-      const datLocal = new Date(tr.created_at).toISOString().split('T')[0];
-      return datLocal === todayLocal;
-    });
+    const trans = transData || [];
 
     // --- STATS (valid sèlman) ---
     const totalDepo = trans.filter(tr => tr.type === 'Depo' && !tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
@@ -59,24 +59,41 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
     const totalFreOuveti = trans.filter(tr => tr.type === 'Fre Ouveti' && !tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
     const totalAnile = trans.filter(tr => tr.annule).length;
     const montanAnile = trans.filter(tr => tr.annule).reduce((s, tr) => s + (tr.montan || 0), 0);
-    const rantre = totalDepo + totalFreOuveti + pemaPreTotal;
-    const soti = totalRetre + totalTransf;
-    const balansJounen = rantre - soti;
 
     const { data: kliyanData } = await supabase.from('kliyan').select('*');
     const kliyan = kliyanData || [];
     const totalKliyan = kliyan.length;
     const kobBloke = kliyan.reduce((s, k) => s + (k.reserve || 500), 0);
     const balansTotal = kliyan.reduce((s, k) => s + (k.balance || 0), 0);
+    // ✅ Vrè kòb disponib = total balans - total reserve
+    const balansDisponib = balansTotal - kobBloke;
+
+    // ✅ Admin wè TOUT total Frè Ouveti (pa filtre pa dat)
+    // Kesye wè sèlman pa li jounen an (totalFreOuveti deja kalkile)
+    let totalFreOuvetiKonplè = totalFreOuveti;
+    if (isAdmin) {
+      const { data: toutBenefis } = await supabase
+        .from('benefis')
+        .select('montan')
+        .eq('type', 'Fre Ouveti Kont');
+      const freOuvetiBenefis = (toutBenefis || []).reduce((s, b) => s + (b.montan || 0), 0);
+      totalFreOuvetiKonplè = Math.max(totalFreOuveti, freOuvetiBenefis);
+    }
+
+    // ✅ Kalkil apre totalFreOuvetiKonplè defini
+    // ✅ Rantre = sèlman tranzaksyon jounen an (totalFreOuveti = jounen an sèlman)
+    const rantre = totalDepo + totalFreOuveti + pemaPreTotal;
+    const soti = totalRetre + totalTransf;
+    const balansJounen = rantre - soti;
 
     const { data: preData } = await supabase.from('pre').select('*').eq('status', 'Aktif');
     const preAktif = (preData || []).length;
-    const benefis = totalDepo - totalRetre + totalFreOuveti;
+    const benefis = totalDepo - totalRetre + totalFreOuvetiKonplè;
 
     setStats({
       totalDepo, totalRetre, totalTransf, totalKliyan,
-      preAktif, benefis, balansKes: balansTotal, kobBloke,
-      pemaPreTotal, totalFreOuveti, totalAnile, montanAnile,
+      preAktif, benefis, balansKes: balansDisponib, kobBloke,
+      pemaPreTotal, totalFreOuveti: totalFreOuvetiKonplè, totalAnile, montanAnile,
       rantre, soti, balansJounen,
     });
 
@@ -269,8 +286,11 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
             <h2 style={{ margin: '0 0 15px', color: '#1a5c2a', fontSize: '14px', fontWeight: '700' }}>💰 Rezime Kès Jounen an</h2>
 
             <div style={{ background: 'linear-gradient(135deg, #1a5c2a, #2d8a45)', borderRadius: '10px', padding: '15px', marginBottom: '12px', color: 'white', textAlign: 'center' }}>
-              <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '5px', fontWeight: '600' }}>Kès Disponib (Balans Kliyan)</div>
+              <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '5px', fontWeight: '600' }}>Kès Disponib (Balans - Reserve)</div>
               <div style={{ fontSize: '22px', fontWeight: '900' }}>HTG {stats.balansKes.toLocaleString()}</div>
+              <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '3px' }}>
+                Total Kliyan: HTG {(stats.balansKes + stats.kobBloke).toLocaleString()} | Reserve: HTG {stats.kobBloke.toLocaleString()}
+              </div>
             </div>
 
             <div style={{ background: '#f0faf3', border: '1px solid #c3e6cb', borderRadius: '10px', padding: '12px', marginBottom: '12px' }}>

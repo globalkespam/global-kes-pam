@@ -50,8 +50,12 @@ function Reports({ user, branches }) {
       // ✅ Filtre pa kesye si chwazi
       if (selectedKesye !== 'Tout Kesye') query = query.eq('kesye', selectedKesye);
     } else {
-      // ✅ Kesye wè sèlman pwòp tranzaksyon pa li
-      query = query.eq('branch', user?.branch).eq('kesye', user?.name);
+      // ✅ Kesye — sèlman pwòp tranzaksyon pa li + jounen an sèlman
+      query = query
+        .eq('branch', user?.branch)
+        .eq('kesye', user?.name)
+        .gte('created_at', today + 'T00:00:00')
+        .lte('created_at', today + 'T23:59:59');
     }
 
     const { data: transData } = await query;
@@ -63,8 +67,12 @@ function Reports({ user, branches }) {
       if (selectedBranch !== 'Tout Branch') benefisQuery = benefisQuery.eq('branch', selectedBranch);
       if (selectedKesye !== 'Tout Kesye') benefisQuery = benefisQuery.eq('kesye', selectedKesye);
     } else {
-      // ✅ Kesye wè sèlman frè ouveti pa li — pa tout branch
-      benefisQuery = benefisQuery.eq('branch', user?.branch).eq('kesye', user?.name);
+      // ✅ Kesye — sèlman pa li + jounen an sèlman
+      benefisQuery = benefisQuery
+        .eq('branch', user?.branch)
+        .eq('kesye', user?.name)
+        .gte('created_at', today + 'T00:00:00')
+        .lte('created_at', today + 'T23:59:59');
     }
     const { data: benData } = await benefisQuery;
     setBenefisData(benData || []);
