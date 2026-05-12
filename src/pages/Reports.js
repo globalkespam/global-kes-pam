@@ -77,8 +77,33 @@ function Reports({ user, branches }) {
     const { data: benData } = await benefisQuery;
     setBenefisData(benData || []);
 
-    const { data: kliData } = await supabase.from('kliyan').select('reserve, balance, branch, nom, prenon');
-    setKliyanData(kliData || []);
+    // ✅ Kòb Bloke — depann sou ki mòd Admin ye
+    if (isAdmin && selectedKesye !== 'Tout Kesye') {
+      // Admin chwazi yon Kesye espesifik — wè sèlman kliyan ouvri jounen an pa Kesye sa a
+      const numKonts = (transData || [])
+        .filter(t => t.type === 'Fre Ouveti' && !t.annule)
+        .map(t => t.num_kont)
+        .filter(Boolean);
+
+      if (numKonts.length > 0) {
+        const { data: kliData } = await supabase
+          .from('kliyan')
+          .select('reserve, balance, branch, nom, prenon')
+          .in('num_kont', numKonts);
+        setKliyanData(kliData || []);
+      } else {
+        // Pa gen kliyan ouvri jounen an pa Kesye sa a
+        setKliyanData([]);
+      }
+    } else {
+      // Tout Kesye oswa Tout Branch — kliyan branch la
+      let kliQuery = supabase.from('kliyan').select('reserve, balance, branch, nom, prenon');
+      if (isAdmin && selectedBranch !== 'Tout Branch') {
+        kliQuery = kliQuery.eq('branch', selectedBranch);
+      }
+      const { data: kliData } = await kliQuery;
+      setKliyanData(kliData || []);
+    }
 
     setLoading(false);
   };
@@ -236,7 +261,7 @@ function Reports({ user, branches }) {
                 `).join('')}
                 <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;border-top:2px solid #000;padding-top:4px;margin-top:4px;">
                   <span>TOTAL VALID:</span>
-                  <span>HTG ${(totalDepo + totalRetre + totalTransf + totalPre).toLocaleString()}</span>
+                  <span>HTG ${(totalDepo + totalRetre + totalTransf + totalPre + totalBenefis).toLocaleString()}</span>
                 </div>
               </div>
               <div style="border-top:2px solid #000;padding-top:8px;margin-top:10px;">
@@ -457,7 +482,7 @@ function Reports({ user, branches }) {
                 <tfoot>
                   <tr style={{ background: '#1a5c2a', color: 'white', fontWeight: '800' }}>
                     <td colSpan="3" style={{ padding: '12px 15px' }}>TOTAL JENERAL</td>
-                    <td style={{ padding: '12px 15px' }}>HTG {transactions.reduce((s, t) => s + (t.montan || 0), 0).toLocaleString()}</td>
+                    <td style={{ padding: '12px 15px' }}>HTG {(transactions.filter(t => !t.annule).reduce((s, t) => s + (t.montan || 0), 0) + totalBenefis).toLocaleString()}</td>
                     <td colSpan="4"></td>
                   </tr>
                 </tfoot>

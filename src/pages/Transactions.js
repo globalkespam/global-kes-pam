@@ -182,8 +182,12 @@ function Transactions({ user, parametres }) {
   const handleDepoSearch = () => setDepoClient(findClient(depoSearch) || null);
   const handleRetreSearch = () => { setRetreClient(findClient(retreSearch) || null); setRetreError(''); };
 
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const handleDepo = async () => {
-    if (!depoClient || !depoAmount) return;
+    if (!depoClient || !depoAmount || isProcessing) return;
+    setIsProcessing(true);
+    try {
     const montan = parseFloat(depoAmount);
     await supabase.from('kliyan').update({ balance: (depoClient.balance || 0) + montan }).eq('id', depoClient.id);
     const ref = generateRef();
@@ -203,11 +207,18 @@ function Transactions({ user, parametres }) {
       mode: depoMode, note: depoNote,
     });
     fetchClients();
-    setDepoSearch(''); setDepoClient(null); setDepoAmount(''); setDepoNote('');
+      setDepoSearch(''); setDepoClient(null); setDepoAmount(''); setDepoNote('');
+    } catch(e) {
+      console.error('Depo erè:', e);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleRetre = async () => {
-    if (!retreClient || !retreAmount) return;
+    if (!retreClient || !retreAmount || isProcessing) return;
+    setIsProcessing(true);
+    try {
     if (retrePin !== retreClient.pin) { setRetreError('PIN enkòrèk!'); return; }
     const montan = parseFloat(retreAmount);
     const reserveKliyan = retreClient.reserve || reserveKont;
@@ -234,12 +245,19 @@ function Transactions({ user, parametres }) {
       note: retreNote,
     });
     fetchClients();
-    setRetreSearch(''); setRetreClient(null); setRetreAmount('');
-    setRetrePin(''); setRetreNote(''); setRetreError('');
+      setRetreSearch(''); setRetreClient(null); setRetreAmount('');
+      setRetrePin(''); setRetreNote(''); setRetreError('');
+    } catch(e) {
+      console.error('Retre erè:', e);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleTransfere = async () => {
-    if (!transSous || !transDest || !transAmount) return;
+    if (!transSous || !transDest || !transAmount || isProcessing) return;
+    setIsProcessing(true);
+    try {
     const montan = parseFloat(transAmount);
     const fre = transFre;
     const kontSous = clients.find(c => c.num_kont === transSous);
@@ -269,7 +287,12 @@ function Transactions({ user, parametres }) {
       note: transNote,
     });
     fetchClients();
-    setTransSous(''); setTransDest(''); setTransAmount(''); setTransNote('');
+      setTransSous(''); setTransDest(''); setTransAmount(''); setTransNote('');
+    } catch(e) {
+      console.error('Transfe erè:', e);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const inputStyle = { width: '100%', padding: '12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box', outline: 'none' };
@@ -347,7 +370,7 @@ function Transactions({ user, parametres }) {
                 <label style={labelStyle}>Not</label>
                 <input value={depoNote} onChange={e => setDepoNote(e.target.value)} placeholder="..." style={inputStyle} />
               </div>
-              <button onClick={handleDepo} disabled={!depoClient || !depoAmount} style={{ background: !depoClient || !depoAmount ? '#ccc' : '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '14px 25px', cursor: !depoClient || !depoAmount ? 'not-allowed' : 'pointer', fontWeight: '700', fontSize: '14px' }}>
+              <button onClick={handleDepo} disabled={!depoClient || !depoAmount || isProcessing} style={{ background: !depoClient || !depoAmount || isProcessing ? '#ccc' : '#1a5c2a', color: 'white', border: 'none', borderRadius: '8px', padding: '14px 25px', cursor: !depoClient || !depoAmount ? 'not-allowed' : 'pointer', fontWeight: '700', fontSize: '14px' }}>
                 Konfime Depo
               </button>
             </div>
@@ -386,7 +409,7 @@ function Transactions({ user, parametres }) {
                 <input value={retreNote} onChange={e => setRetreNote(e.target.value)} placeholder="..." style={inputStyle} />
               </div>
               {retreError && <div style={{ background: '#fdf2f2', color: '#e74c3c', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px', fontWeight: '600' }}>{retreError}</div>}
-              <button onClick={handleRetre} disabled={!retreClient || !retreAmount} style={{ background: !retreClient || !retreAmount ? '#ccc' : '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', padding: '14px 25px', cursor: !retreClient || !retreAmount ? 'not-allowed' : 'pointer', fontWeight: '700', fontSize: '14px' }}>
+              <button onClick={handleRetre} disabled={!retreClient || !retreAmount || isProcessing} style={{ background: !retreClient || !retreAmount || isProcessing ? '#ccc' : '#e74c3c', color: 'white', border: 'none', borderRadius: '8px', padding: '14px 25px', cursor: !retreClient || !retreAmount ? 'not-allowed' : 'pointer', fontWeight: '700', fontSize: '14px' }}>
                 Konfime Retre
               </button>
             </div>
@@ -422,7 +445,7 @@ function Transactions({ user, parametres }) {
               <label style={labelStyle}>Not</label>
               <input value={transNote} onChange={e => setTransNote(e.target.value)} placeholder="..." style={inputStyle} />
             </div>
-            <button onClick={handleTransfere} disabled={!transSous || !transDest || !transAmount} style={{ background: !transSous || !transDest || !transAmount ? '#ccc' : '#f39c12', color: 'white', border: 'none', borderRadius: '8px', padding: '14px 25px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
+            <button onClick={handleTransfere} disabled={!transSous || !transDest || !transAmount || isProcessing} style={{ background: !transSous || !transDest || !transAmount || isProcessing ? '#ccc' : '#f39c12', color: 'white', border: 'none', borderRadius: '8px', padding: '14px 25px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
               Fe Transfe
             </button>
           </div>
