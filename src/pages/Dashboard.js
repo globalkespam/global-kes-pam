@@ -88,7 +88,26 @@ function Dashboard({ user, navigate, t, currentTime, oreKes }) {
 
     const { data: preData } = await supabase.from('pre').select('*').eq('status', 'Aktif');
     const preAktif = (preData || []).length;
-    const benefis = totalDepo - totalRetre + totalFreOuvetiKonplè;
+    // ✅ Benefis TOTAL — tout kòb (pa filtre pa dat) menm jan Kòb Bloke
+    const { data: toutBenefisData } = await supabase
+      .from('benefis')
+      .select('*');
+
+    const toutBenefis = toutBenefisData || [];
+
+    // Frè Transfè — total tout tranzaksyon (pa jis jounen an)
+    const { data: toutTransfData } = await supabase
+      .from('tranzaksyon')
+      .select('fre')
+      .eq('type', 'Transfere')
+      .eq('annule', false);
+
+    const totalFreTransf = (toutTransfData || []).reduce((s, t) => s + (t.fre || 0), 0);
+    const totalEntere = toutBenefis.filter(b => b.type === 'Enterè Prè').reduce((s, b) => s + (b.montan || 0), 0);
+    const totalPenalite = toutBenefis.filter(b => b.type === 'Penalite Prè').reduce((s, b) => s + (b.montan || 0), 0);
+    const totalFreOuvetiAll = toutBenefis.filter(b => b.type === 'Fre Ouveti Kont').reduce((s, b) => s + (b.montan || 0), 0);
+
+    const benefis = totalFreOuvetiAll + totalFreTransf + totalEntere + totalPenalite;
 
     setStats({
       totalDepo, totalRetre, totalTransf, totalKliyan,
